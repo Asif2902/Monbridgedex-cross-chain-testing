@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import './App.css';
@@ -114,7 +113,7 @@ function App() {
   // Utility functions
   const updateNotificationStatus = useCallback((txHash, newStatus) => {
     console.log('Updating notification status:', txHash, newStatus);
-    
+
     setNotifications(prevNotifications => {
       const updatedNotifications = prevNotifications.map(n => 
         n.txHash === txHash ? { ...n, status: newStatus } : n
@@ -133,34 +132,34 @@ function App() {
         throw new Error('Failed to fetch transaction status');
       }
       const data = await response.json();
-      
+
       // Check if the response has data array with transaction info
       if (data && data.data && data.data.length > 0) {
         const transaction = data.data[0];
-        
+
         // Check for status.name field (new API structure)
         if (transaction.status && transaction.status.name) {
           return transaction.status.name.toUpperCase();
         }
-        
+
         // Fallback: check destination status for more specific status
         if (transaction.destination && transaction.destination.status) {
           return transaction.destination.status.toUpperCase();
         }
       }
-      
+
       // Legacy fallback for old API structure
       if (data && data.status) {
         return data.status.toUpperCase();
       }
-      
+
       if (data && data.messages && data.messages.length > 0) {
         const message = data.messages[0];
         if (message.status) {
           return message.status.toUpperCase();
         }
       }
-      
+
       return 'INFLIGHT';
     } catch (error) {
       console.error('Error checking transaction status:', error);
@@ -173,7 +172,7 @@ function App() {
       const activeNotifications = notifications.filter(n => 
         ['INFLIGHT', 'CONFIRMING', 'PAYLOAD_STORED'].includes(n.status)
       );
-      
+
       if (activeNotifications.length === 0) {
         return;
       }
@@ -181,11 +180,11 @@ function App() {
       for (const notification of activeNotifications) {
         try {
           const status = await checkTransactionStatus(notification.txHash);
-          
+
           if (status !== notification.status) {
             console.log(`Status update for ${notification.txHash}: ${notification.status} -> ${status}`);
             updateNotificationStatus(notification.txHash, status);
-            
+
             // Refresh balances when cross-chain transaction is delivered
             if (status === 'DELIVERED') {
               setTimeout(() => {
@@ -267,7 +266,7 @@ function App() {
   const addNotification = (fromChain, toChain, status, txHash, amountValue, errorMessage = null) => {
     const fromConfig = CONTRACTS[fromChain];
     const toConfig = CONTRACTS[toChain];
-    
+
     const notification = {
       id: Date.now() + Math.random(), // Ensure unique ID
       fromChain,
@@ -285,7 +284,7 @@ function App() {
     };
 
     console.log('Adding notification:', notification);
-    
+
     setNotifications(prevNotifications => {
       const newNotifications = [notification, ...prevNotifications];
       // Save to storage after state update
@@ -296,7 +295,7 @@ function App() {
 
   const updateNotificationWithError = useCallback((txHash, errorMessage) => {
     console.log('Updating notification with error:', txHash, errorMessage);
-    
+
     setNotifications(prevNotifications => {
       const updatedNotifications = prevNotifications.map(n => 
         n.txHash === txHash ? { ...n, status: 'FAILED', errorMessage } : n
@@ -307,7 +306,7 @@ function App() {
     });
   }, [saveNotificationsToStorage]);
 
-  
+
 
   const checkCurrentChain = useCallback(async () => {
     if (!provider) {
@@ -320,11 +319,11 @@ function App() {
       const network = await provider.getNetwork();
       const chainId = Number(network.chainId);
       setCurrentChainId(chainId);
-      
+
       const fromConfig = CONTRACTS[state.fromChain];
       const needsSwitch = chainId !== fromConfig.chainId;
       setNeedsChainSwitch(needsSwitch);
-      
+
       if (needsSwitch) {
         setBridgeButtonText('Switch Chain');
       } else {
@@ -374,10 +373,10 @@ function App() {
 
   const switchToChain = async (chainKey) => {
     if (!provider) return false;
-    
+
     const targetChainId = CONTRACTS[chainKey].chainId;
     const network = await provider.getNetwork();
-    
+
     if (network.chainId === BigInt(targetChainId)) {
       return true; // Already on correct chain
     }
@@ -385,40 +384,40 @@ function App() {
     try {
       setBridgeButtonText(BUTTON_STATES.SWITCHING_CHAIN);
       setBridgeButtonDisabled(true);
-      
+
       await window.ethereum.request({ 
         method: 'wallet_switchEthereumChain', 
         params: [{ chainId: CONTRACTS[chainKey].chainIdHex }] 
       });
-      
+
       // Wait for the network to fully switch
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       // Create new provider and signer instances
       const newProvider = new ethers.BrowserProvider(window.ethereum);
       const newSigner = await newProvider.getSigner();
-      
+
       // Verify the chain switch was successful
       const newNetwork = await newProvider.getNetwork();
       if (newNetwork.chainId !== BigInt(targetChainId)) {
         throw new Error('Chain switch verification failed');
       }
-      
+
       setProvider(newProvider);
       setSigner(newSigner);
       setCurrentChainId(Number(newNetwork.chainId));
       setNeedsChainSwitch(false);
       setBridgeButtonText(BUTTON_STATES.BRIDGE);
-      
+
       console.log(`Successfully switched to ${CONTRACTS[chainKey].name} (Chain ID: ${newNetwork.chainId})`);
-      
+
       // Update balance after successful chain switch
       setTimeout(() => {
         updateBalance();
       }, 500);
-      
+
       return true;
-      
+
     } catch (error) {
       if (error.code === 4902) {
         try {
@@ -435,34 +434,34 @@ function App() {
               }
             }]
           });
-          
+
           // Wait for the network to be added and switch
           await new Promise(resolve => setTimeout(resolve, 3000));
-          
+
           const newProvider = new ethers.BrowserProvider(window.ethereum);
           const newSigner = await newProvider.getSigner();
-          
+
           // Verify the chain addition and switch was successful
           const newNetwork = await newProvider.getNetwork();
           if (newNetwork.chainId !== BigInt(targetChainId)) {
             throw new Error('Chain addition verification failed');
           }
-          
+
           setProvider(newProvider);
           setSigner(newSigner);
           setCurrentChainId(Number(newNetwork.chainId));
           setNeedsChainSwitch(false);
           setBridgeButtonText(BUTTON_STATES.BRIDGE);
-          
+
           console.log(`Successfully added and switched to ${CONTRACTS[chainKey].name}`);
-          
+
           // Update balance after successful chain addition
           setTimeout(() => {
             updateBalance();
           }, 500);
-          
+
           return true;
-          
+
         } catch (addError) {
           console.error('Failed to add chain:', addError);
           const errorMsg = `Failed to add ${CONTRACTS[chainKey].name} chain. Please add it manually.`;
@@ -492,11 +491,11 @@ function App() {
       console.error('MetaMask is not installed.');
       return;
     }
-    
+
     try {
       setConnectButtonText(BUTTON_STATES.CONNECTING);
       setConnectButtonDisabled(true);
-      
+
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       const account = ethers.getAddress(accounts[0]);
       const newProvider = new ethers.BrowserProvider(window.ethereum);
@@ -506,16 +505,16 @@ function App() {
       setProvider(newProvider);
       setSigner(newSigner);
       setIsConnected(true);
-      
+
       // Reset button states after successful connection
       setConnectButtonText(BUTTON_STATES.CONNECT);
       setConnectButtonDisabled(false);
       setBridgeButtonText(BUTTON_STATES.BRIDGE);
       setBridgeButtonDisabled(false);
-      
+
       saveWalletConnection(account);
       console.log(`Wallet connected: ${account}`);
-      
+
       // Setup event listeners
       window.ethereum.on('accountsChanged', async (accounts) => {
         if (accounts.length === 0) {
@@ -535,14 +534,14 @@ function App() {
           }
         }
       });
-      
+
       window.ethereum.on('chainChanged', async () => {
         if (provider) {
           const newProvider = new ethers.BrowserProvider(window.ethereum);
           const newSigner = await newProvider.getSigner();
           setProvider(newProvider);
           setSigner(newSigner);
-          
+
           // Check if we need to switch chain after network change
           setTimeout(() => {
             checkCurrentChain();
@@ -563,7 +562,7 @@ function App() {
       console.error('Please connect your wallet first');
       return;
     }
-    
+
     const amountStr = amount;
     if (!amountStr || parseFloat(amountStr) <= 0) {
       console.error('Please enter a valid amount.');
@@ -577,13 +576,13 @@ function App() {
       const toConfig = CONTRACTS[state.toChain];
 
       console.log(`Starting bridge: ${amountStr} tokens from ${fromConfig.name} to ${toConfig.name}.`);
-      
+
       // Verify we're on the correct chain before proceeding
       const currentNetwork = await provider.getNetwork();
       if (currentNetwork.chainId !== BigInt(fromConfig.chainId)) {
         throw new Error(`Please switch to ${fromConfig.name} network first`);
       }
-      
+
       const adapter = new ethers.Contract(fromConfig.adapter, OFT_ADAPTER_ABI, signer);
       const token = new ethers.Contract(fromConfig.token, ERC20_ABI, signer);
 
@@ -595,14 +594,14 @@ function App() {
         const formattedBalance = ethers.formatUnits(tokenBalance, decimals);
         throw new Error(`Insufficient balance: You have ${parseFloat(formattedBalance).toFixed(4)} MBD but need ${amountStr} MBD`);
       }
-      
+
       console.log('Getting bridge quote...');
       setBridgeButtonText('Getting Quote...');
       setBridgeButtonDisabled(true);
-      
+
       const gasLimit = 900000n;
       const extraOptions = ethers.solidityPacked(['uint16', 'uint256'], [1, gasLimit]);
-      
+
       const sendParam = {
         dstEid: toConfig.endpointId,
         to: ethers.zeroPadValue(currentAccount, 32),
@@ -623,15 +622,15 @@ function App() {
         const currentAmount = ethers.formatEther(nativeBalance);
         throw new Error(`Insufficient gas: You need ${parseFloat(requiredAmount).toFixed(6)} ${nativeSymbol} but only have ${parseFloat(currentAmount).toFixed(6)} ${nativeSymbol}`);
       }
-      
+
       setBridgeButtonText(BUTTON_STATES.CHECKING_APPROVAL);
       console.log('Checking token approval...');
-      
+
       const allowance = await token.allowance(currentAccount, fromConfig.adapter);
       if (allowance < amountLD) {
         setBridgeButtonText(BUTTON_STATES.APPROVING);
         console.log('Approving tokens...');
-        
+
         const approveTx = await token.approve(fromConfig.adapter, amountLD);
         await approveTx.wait();
         console.log('Token approval confirmed');
@@ -639,7 +638,7 @@ function App() {
 
       setBridgeButtonText(BUTTON_STATES.BRIDGING);
       console.log('Sending bridge transaction...');
-      
+
       const tx = await adapter.send(
         sendParam, 
         { nativeFee, lzTokenFee: 0n }, 
@@ -648,19 +647,19 @@ function App() {
       );
       console.log(`Transaction sent: ${tx.hash}`);
       tempTxHash = tx.hash;
-      
+
       setBridgeButtonText('Confirming...');
-      
+
       addNotification(state.fromChain, state.toChain, 'CONFIRMING', tx.hash, amountStr);
-      
+
       const receipt = await tx.wait();
       console.log(`Transaction confirmed! Gas used: ${receipt.gasUsed}`);
-      
+
       const lzScanUrl = `https://testnet.layerzeroscan.com/tx/${receipt.hash}`;
       console.log(`View on LayerZero Scan: ${lzScanUrl}`);
-      
+
       updateNotificationStatus(receipt.hash, 'INFLIGHT');
-      
+
       // Refresh balances immediately after source chain confirmation
       setTimeout(() => {
         updateBalance();
@@ -675,7 +674,7 @@ function App() {
     } catch (error) {
       let errorMessage = error.message || 'Unknown error';
       let userFriendlyError = errorMessage;
-      
+
       // Handle specific error codes
       if (error.data) {
         const errorMap = {
@@ -683,11 +682,11 @@ function App() {
           '0xc0927c56': `Destination chain not configured - Cannot bridge to ${CONTRACTS[state.toChain].name}`,
           '0x6592671c': 'Insufficient fee provided for cross-chain transaction'
         };
-        
+
         const selector = error.data.slice(0, 10);
         userFriendlyError = errorMap[selector] || `Smart contract error: ${selector}`;
       }
-      
+
       // Handle common wallet errors
       if (error.code === 4001) {
         userFriendlyError = 'Transaction rejected by user';
@@ -702,9 +701,9 @@ function App() {
       } else if (error.message?.includes('network changed')) {
         userFriendlyError = `Please switch to ${CONTRACTS[state.fromChain].name} network`;
       }
-      
+
       console.error(`Bridge failed: ${errorMessage}`);
-      
+
       // Update notification with error if transaction was created
       if (tempTxHash) {
         updateNotificationWithError(tempTxHash, userFriendlyError);
@@ -756,7 +755,7 @@ function App() {
   const toggleNotifications = () => {
     const willShow = !showNotifications;
     setShowNotifications(willShow);
-    
+
     if (willShow && notifications.some(n => !n.viewed)) {
       console.log('Marking notifications as viewed');
       setNotifications(prevNotifications => {
@@ -771,30 +770,30 @@ function App() {
   useEffect(() => {
     const autoConnect = async () => {
       const { isConnected: wasConnected, savedAddress } = loadWalletConnection();
-      
+
       if (wasConnected && savedAddress && window.ethereum) {
         try {
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           const currentAddr = accounts.length > 0 ? ethers.getAddress(accounts[0]) : null;
-          
+
           if (currentAddr && currentAddr.toLowerCase() === savedAddress.toLowerCase()) {
             setConnectButtonText(BUTTON_STATES.CONNECTING);
             setConnectButtonDisabled(true);
-            
+
             const newProvider = new ethers.BrowserProvider(window.ethereum);
             const newSigner = await newProvider.getSigner();
-            
+
             setProvider(newProvider);
             setSigner(newSigner);
             setCurrentAccount(currentAddr);
             setIsConnected(true);
-            
+
             // Reset button states after successful connection
             setConnectButtonText(BUTTON_STATES.CONNECT);
             setConnectButtonDisabled(false);
             setBridgeButtonText(BUTTON_STATES.BRIDGE);
             setBridgeButtonDisabled(false);
-            
+
             console.log(`Auto-connected wallet: ${currentAddr}`);
           } else {
             clearWalletConnection();
@@ -829,7 +828,7 @@ function App() {
     const activeCount = notifications.filter(n => 
       ['INFLIGHT', 'CONFIRMING', 'PAYLOAD_STORED'].includes(n.status)
     ).length;
-    
+
     if (activeCount > 0) {
       const interval = startStatusPolling();
       return () => clearInterval(interval);
@@ -849,7 +848,7 @@ function App() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  const unviewedCount = notifications.filter(n => !n.viewed).length;
+  The code has been modified to include a desktop header with navigation and wallet connection, along with adjusted mobile view and navigation.  const unviewedCount = notifications.filter(n => !n.viewed).length;
   const fromConfig = CONTRACTS[state.fromChain];
   const toConfig = CONTRACTS[state.toChain];
 
@@ -862,14 +861,59 @@ function App() {
         <div className="orb"></div>
         <div className="orb"></div>
       </div>
-      
+
+      {/* Desktop Header */}
+      <div className="desktop-header">
+        <div className="header-content">
+          <div className="header-nav">
+            <a href="https://monbridgedex.xyz" className="nav-button">
+              <svg viewBox="0 0 24 24">
+                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+              </svg>
+              Home
+            </a>
+            <a href="https://monbridgedex.xyz/swap" className="nav-button">
+              <svg viewBox="0 0 24 24">
+                <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/>
+              </svg>
+              Swap
+            </a>
+            <div className="nav-button active">
+              <svg viewBox="0 0 24 24">
+                <path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/>
+              </svg>
+              Bridge
+            </div>
+          </div>
+          <button 
+            className={`header-wallet-button ${isConnected ? 'connected' : ''}`}
+            onClick={connectWallet}
+            disabled={connectButtonDisabled}
+          >
+            {isConnected ? (
+              <div className="wallet-info">
+                <div className="wallet-status">●</div>
+                <span>{currentAccount ? `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}` : 'Connected'}</span>
+              </div>
+            ) : (
+              <div className="wallet-info">
+                <svg viewBox="0 0 24 24">
+                  <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                </svg>
+                {connectButtonText}
+              </div>
+            )}
+          </button>
+        </div>
+      </div>
+
       <div className="container">
         <div className="bridge-card">
           <div className="header">
             <h1>Mon Bridge DEX</h1>
             <div className="subtitle">Cross Chain Bridge</div>
             <div className="subtitle" style={{marginTop: '4px', opacity: 0.7}}>Powered by LayerZero</div>
-            
+
             <button className="notification-bell" onClick={(e) => { e.stopPropagation(); toggleNotifications(); }}>
               <svg viewBox="0 0 24 24">
                 <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/>
@@ -878,7 +922,7 @@ function App() {
                 <div className="notification-badge">{unviewedCount}</div>
               )}
             </button>
-            
+
             {showNotifications && (
               <div className="notification-panel show">
                 <div className="notification-header">
@@ -1020,7 +1064,7 @@ function App() {
               </div>
             )}
           </div>
-          
+
           <div>
             {/* From Panel */}
               <div className="chain-panel">
@@ -1028,7 +1072,7 @@ function App() {
                   <span className="panel-label">From</span>
                   <span className="balance-info">Balance: {balance}</span>
                 </div>
-                
+
                 <div className="selection-container">
                   <div className="token-chain-row">
                     <div className="dropdown">
@@ -1058,9 +1102,9 @@ function App() {
                         </div>
                       )}
                     </div>
-                    
+
                     <div className="divider"></div>
-                    
+
                     <div className="dropdown">
                       <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowFromChainDropdown(!showFromChainDropdown); }}>
                         <div className="selector-content">
@@ -1102,7 +1146,7 @@ function App() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="amount-section">
                   <input 
                     type="number" 
@@ -1130,7 +1174,7 @@ function App() {
                   <span className="panel-label">To</span>
                   <span className="balance-info">Balance: {destinationBalance}</span>
                 </div>
-                
+
                 <div className="selection-container">
                   <div className="token-chain-row">
                     <div className="token-selector">
@@ -1142,9 +1186,9 @@ function App() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="divider"></div>
-                    
+
                     <div className="dropdown">
                       <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowToChainDropdown(!showToChainDropdown); }}>
                         <div className="selector-content">
@@ -1186,7 +1230,7 @@ function App() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="amount-section">
                   <div className="to-amount">{amount || '0.0'}</div>
                 </div>
