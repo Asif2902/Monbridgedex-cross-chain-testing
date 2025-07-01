@@ -1290,7 +1290,7 @@ function App() {
               </button>
             </div>
         </div>
-    
+      </div>
 
         {/* Mobile Footer Navigation */}
         <div className="mobile-footer">
@@ -1319,4 +1319,4 @@ function App() {
     );
   }
 
-export default App; default App;
+export default App;
