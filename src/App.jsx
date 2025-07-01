@@ -909,7 +909,7 @@ function App() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  const unviewedCount = notifications.filter(n => !n.viewed).length;
+  The code has been modified to include a desktop header with navigation and wallet connection, along with adjusted mobile view and navigation.  const unviewedCount = notifications.filter(n => !n.viewed).length;
   const fromConfig = CONTRACTS[state.fromChain];
   const toConfig = CONTRACTS[state.toChain];
 
@@ -1316,17 +1316,23 @@ function App() {
                 </div>
 
                 <div className="amount-section">
-                  <div className="to-amount">{amount || '0.0'}</div>
-                  <div className="gas-estimate">
-                    <span className="gas-label">Estimated bridge cost:</span>
-                    <span className="gas-cost">{estimatedGasCost}</span>
-                  </div>
+                  <input 
+                    type="number" 
+                    className="amount-input to-amount-input" 
+                    placeholder="0.0" 
+                    step="any"
+                    value={amount || ''}
+                    readOnly
+                  />
                 </div>
+                
+                <div className="gas-estimate">
+                  <span className="gas-label">Estimated bridge cost:</span>
+                  <span className="gas-cost">{estimatedGasCost}</span>
+                </div></div>
               </div>
 
-              <div className="future-notice">
-                🚀 More tokens and chains coming soon! Stay tuned for updates.
-              </div>
+              
 
               <button 
                 className="action-button bridge" 
