@@ -1291,7 +1291,7 @@ function App() {
             </div>
         </div>
       </div>
-
+<div>
         {/* Mobile Footer Navigation */}
         <div className="mobile-footer">
           <div className="footer-nav">
