@@ -10,7 +10,7 @@ import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { sepolia, base } from 'wagmi/chains';
 import '@rainbow-me/rainbowkit/styles.css';
 
-// Custom Monad chain configuration
+
 const monadTestnet = {
   id: 10143,
   name: 'Monad Testnet',
@@ -30,11 +30,39 @@ const monadTestnet = {
   testnet: true,
 };
 
+const BaseSepolia = {
+  id: 84532,
+  name: 'Base Sepolia',
+  network: 'BaseSepolia',
+  nativeCurrency: {
+    name: 'Sepolia Ether',
+    symbol: 'ETH',
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      // Light/dev default from Base docs:
+      http: ['https://sepolia.base.org'],
+    },
+    public: {
+      // Better reliability via publicnode:
+      http: ['https://base-sepolia-rpc.publicnode.com'],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: 'BaseScan',
+      url: 'https://sepolia.basescan.org',
+    },
+  },
+  testnet: true,
+};
+
 // RainbowKit configuration
 const config = getDefaultConfig({
   appName: 'Mon Bridge DEX',
-  projectId: 'your-project-id', // Replace with your actual WalletConnect project ID
-  chains: [monadTestnet, sepolia, base],
+  projectId: 'fd923eab39a4ca459b3fa3def4c77a70', 
+  chains: [monadTestnet, sepolia, BaseSepolia],
   ssr: false,
 });
 
