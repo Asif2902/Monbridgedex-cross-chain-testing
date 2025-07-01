@@ -848,7 +848,7 @@ function App() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-    const unviewedCount = notifications.filter(n => !n.viewed).length;
+  const unviewedCount = notifications.filter(n => !n.viewed).length;
   const fromConfig = CONTRACTS[state.fromChain];
   const toConfig = CONTRACTS[state.toChain];
 
@@ -860,6 +860,29 @@ function App() {
         <div className="orb"></div>
         <div className="orb"></div>
         <div className="orb"></div>
+      </div>
+
+      {/* Mobile Header */}
+      <div className="mobile-header">
+        <button 
+          className={`mobile-header-wallet-button ${isConnected ? 'connected' : ''}`}
+          onClick={connectWallet}
+          disabled={connectButtonDisabled}
+        >
+          {isConnected ? (
+            <div className="wallet-info">
+              <div className="wallet-status">●</div>
+              <span>{currentAccount ? `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}` : 'Connected'}</span>
+            </div>
+          ) : (
+            <div className="wallet-info">
+              <svg viewBox="0 0 24 24">
+                <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+              </svg>
+              {connectButtonText}
+            </div>
+          )}
+        </button>
       </div>
 
       {/* Desktop Header */}
@@ -1248,6 +1271,30 @@ function App() {
                 {isConnected ? bridgeButtonText : connectButtonText}
               </button>
             </div>
+        </div>
+      </div>
+
+      {/* Mobile Footer Navigation */}
+      <div className="mobile-footer">
+        <div className="footer-nav">
+          <a href="https://monbridgedex.xyz" className="footer-nav-item">
+            <svg viewBox="0 0 24 24">
+              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+            </svg>
+            Home
+          </a>
+          <a href="https://monbridgedex.xyz/swap" className="footer-nav-item">
+            <svg viewBox="0 0 24 24">
+              <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/>
+            </svg>
+            Swap
+          </a>
+          <div className="footer-nav-item active">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/>
+            </svg>
+            Bridge
+          </div>
         </div>
       </div>
     </div>
