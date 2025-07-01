@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } from 'wagmi';
@@ -1098,117 +1099,16 @@ function App() {
 
           <div>
             {/* From Panel */}
-              <div className="chain-panel">
-                <div className="panel-header">
-                  <span className="panel-label">From</span>
-                  <span className="balance-info">Balance: {balance}</span>
-                </div>
-
-                <div className="selection-container">
-                  <div className="token-chain-row">
-                    <div className="dropdown">
-                      <div className="token-selector" onClick={(e) => { e.stopPropagation(); setShowFromTokenDropdown(!showFromTokenDropdown); }}>
-                        <div className="selector-content">
-                          <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
-                          <div className="selector-text">
-                            <span className="token-symbol">MBD</span>
-                            <span className="selector-label">Token</span>
-                          </div>
-                        </div>
-                        <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      {showFromTokenDropdown && (
-                        <div className="dropdown-content show">
-                          <div className="dropdown-item">
-                            <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
-                            <span>MBD</span>
-                          </div>
-                          <div className="dropdown-item coming-soon">
-                            <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px'}}>?</div>
-                            <span>More tokens</span>
-                            <span className="coming-soon-badge">Soon</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="divider"></div>
-
-                    <div className="dropdown">
-                      <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowFromChainDropdown(!showFromChainDropdown); }}>
-                        <div className="selector-content">
-                          <img src={fromConfig.logo} alt={fromConfig.name} className="chain-logo" />
-                          <div className="selector-text">
-                            <span className="chain-name">{fromConfig.name}</span>
-                            <span className="selector-label">Chain</span>
-                          </div>
-                        </div>
-                        <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      {showFromChainDropdown && (
-                        <div className="dropdown-content show">
-                          {Object.entries(CONTRACTS).map(([key, config]) => (
-                            <div 
-                              key={key}
-                              className="dropdown-item" 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                if (key !== state.toChain) {
-                                  setState({...state, fromChain: key});
-                                  setShowFromChainDropdown(false);
-                                }
-                              }}
-                            >
-                              <img src={config.logo} alt={config.name} className="chain-logo" />
-                              <span>{config.name}</span>
-                            </div>
-                          ))}
-                          <div className="dropdown-item coming-soon">
-                            <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '8px'}}>?</div>
-                            <span>More chains</span>
-                            <span className="coming-soon-badge">Soon</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="amount-section">
-                  <input 
-                    type="number" 
-                    className="amount-input" 
-                    placeholder="0.0" 
-                    step="any"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                </div>
+            <div className="chain-panel">
+              <div className="panel-header">
+                <span className="panel-label">From</span>
+                <span className="balance-info">Balance: {balance}</span>
               </div>
 
-              {/* Swap Button */}
-              <div className="swap-container">
-                <button className="swap-button" onClick={swapChains} title="Swap chains">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"></path>
-                  </svg>
-                </button>
-              </div>
-
-              {/* To Panel */}
-              <div className="chain-panel">
-                <div className="panel-header">
-                  <span className="panel-label">To</span>
-                  <span className="balance-info">Balance: {destinationBalance}</span>
-                </div>
-
-                <div className="selection-container">
-                  <div className="token-chain-row">
-                    <div className="token-selector">
+              <div className="selection-container">
+                <div className="token-chain-row">
+                  <div className="dropdown">
+                    <div className="token-selector" onClick={(e) => { e.stopPropagation(); setShowFromTokenDropdown(!showFromTokenDropdown); }}>
                       <div className="selector-content">
                         <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
                         <div className="selector-text">
@@ -1216,107 +1116,206 @@ function App() {
                           <span className="selector-label">Token</span>
                         </div>
                       </div>
+                      <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
                     </div>
-
-                    <div className="divider"></div>
-
-                    <div className="dropdown">
-                      <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowToChainDropdown(!showToChainDropdown); }}>
-                        <div className="selector-content">
-                          <img src={toConfig.logo} alt={toConfig.name} className="chain-logo" />
-                          <div className="selector-text">
-                            <span className="chain-name">{toConfig.name}</span>
-                            <span className="selector-label">Chain</span>
-                          </div>
+                    {showFromTokenDropdown && (
+                      <div className="dropdown-content show">
+                        <div className="dropdown-item">
+                          <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
+                          <span>MBD</span>
                         </div>
-                        <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
+                        <div className="dropdown-item coming-soon">
+                          <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px'}}>?</div>
+                          <span>More tokens</span>
+                          <span className="coming-soon-badge">Soon</span>
+                        </div>
                       </div>
-                      {showToChainDropdown && (
-                        <div className="dropdown-content show">
-                          {Object.entries(CONTRACTS).map(([key, config]) => (
-                            <div 
-                              key={key}
-                              className="dropdown-item" 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                if (key !== state.fromChain) {
-                                  setState({...state, toChain: key});
-                                  setShowToChainDropdown(false);
-                                }
-                              }}
-                            >
-                              <img src={config.logo} alt={config.name} className="chain-logo" />
-                              <span>{config.name}</span>
-                            </div>
-                          ))}
-                          <div className="dropdown-item coming-soon">
-                            <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '8px'}}>?</div>
-                            <span>More chains</span>
-                            <span className="coming-soon-badge">Soon</span>
-                          </div>
+                    )}
+                  </div>
+
+                  <div className="divider"></div>
+
+                  <div className="dropdown">
+                    <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowFromChainDropdown(!showFromChainDropdown); }}>
+                      <div className="selector-content">
+                        <img src={fromConfig.logo} alt={fromConfig.name} className="chain-logo" />
+                        <div className="selector-text">
+                          <span className="chain-name">{fromConfig.name}</span>
+                          <span className="selector-label">Chain</span>
                         </div>
-                      )}
+                      </div>
+                      <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
                     </div>
+                    {showFromChainDropdown && (
+                      <div className="dropdown-content show">
+                        {Object.entries(CONTRACTS).map(([key, config]) => (
+                          <div 
+                            key={key}
+                            className="dropdown-item" 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (key !== state.toChain) {
+                                setState({...state, fromChain: key});
+                                setShowFromChainDropdown(false);
+                              }
+                            }}
+                          >
+                            <img src={config.logo} alt={config.name} className="chain-logo" />
+                            <span>{config.name}</span>
+                          </div>
+                        ))}
+                        <div className="dropdown-item coming-soon">
+                          <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '8px'}}>?</div>
+                          <span>More chains</span>
+                          <span className="coming-soon-badge">Soon</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="amount-section">
-                  <input 
-                    type="number" 
-                    className="amount-input to-amount-input" 
-                    placeholder="0.0" 
-                    step="any"
-                    value={amount || ''}
-                    readOnly
-                  />
-                </div>
-                
-                <div className="gas-estimate">
-                  <span className="gas-label">Estimated bridge cost:</span>
-                  <span className="gas-cost">{estimatedGasCost}</span>
-                </div></div>
               </div>
 
-              
+              <div className="amount-section">
+                <input 
+                  type="number" 
+                  className="amount-input" 
+                  placeholder="0.0" 
+                  step="any"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+            </div>
 
-              <button 
-                className="action-button bridge" 
-                onClick={handleMainAction}
-                disabled={bridgeButtonDisabled || connectButtonDisabled}
-              >
-                {isConnected ? bridgeButtonText : connectButtonText}
+            {/* Swap Button */}
+            <div className="swap-container">
+              <button className="swap-button" onClick={swapChains} title="Swap chains">
+                <svg viewBox="0 0 24 24">
+                  <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"></path>
+                </svg>
               </button>
             </div>
-        </div>
-      </div>
-<div>
-        {/* Mobile Footer Navigation */}
-        <div className="mobile-footer">
-          <div className="footer-nav">
-            <a href="https://monbridgedex.xyz" className="footer-nav-item">
-              <svg viewBox="0 0 24 24">
-                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
-              </svg>
-              Home
-            </a>
-            <a href="https://monbridgedex.xyz/swap" className="footer-nav-item">
-              <svg viewBox="0 0 24 24">
-                <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/>
-              </svg>
-              Swap
-            </a>
-            <div className="footer-nav-item active">
-              <svg viewBox="0 0 24 24">
-                <path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/>
-              </svg>
-              Bridge
+
+            {/* To Panel */}
+            <div className="chain-panel">
+              <div className="panel-header">
+                <span className="panel-label">To</span>
+                <span className="balance-info">Balance: {destinationBalance}</span>
+              </div>
+
+              <div className="selection-container">
+                <div className="token-chain-row">
+                  <div className="token-selector">
+                    <div className="selector-content">
+                      <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
+                      <div className="selector-text">
+                        <span className="token-symbol">MBD</span>
+                        <span className="selector-label">Token</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="divider"></div>
+
+                  <div className="dropdown">
+                    <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowToChainDropdown(!showToChainDropdown); }}>
+                      <div className="selector-content">
+                        <img src={toConfig.logo} alt={toConfig.name} className="chain-logo" />
+                        <div className="selector-text">
+                          <span className="chain-name">{toConfig.name}</span>
+                          <span className="selector-label">Chain</span>
+                        </div>
+                      </div>
+                      <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    {showToChainDropdown && (
+                      <div className="dropdown-content show">
+                        {Object.entries(CONTRACTS).map(([key, config]) => (
+                          <div 
+                            key={key}
+                            className="dropdown-item" 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (key !== state.fromChain) {
+                                setState({...state, toChain: key});
+                                setShowToChainDropdown(false);
+                              }
+                            }}
+                          >
+                            <img src={config.logo} alt={config.name} className="chain-logo" />
+                            <span>{config.name}</span>
+                          </div>
+                        ))}
+                        <div className="dropdown-item coming-soon">
+                          <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '8px'}}>?</div>
+                          <span>More chains</span>
+                          <span className="coming-soon-badge">Soon</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="amount-section">
+                <input 
+                  type="number" 
+                  className="amount-input to-amount-input" 
+                  placeholder="0.0" 
+                  step="any"
+                  value={amount || ''}
+                  readOnly
+                />
+              </div>
+              
+              <div className="gas-estimate">
+                <span className="gas-label">Estimated bridge cost:</span>
+                <span className="gas-cost">{estimatedGasCost}</span>
+              </div>
             </div>
+
+            <button 
+              className="action-button bridge" 
+              onClick={handleMainAction}
+              disabled={bridgeButtonDisabled || connectButtonDisabled}
+            >
+              {isConnected ? bridgeButtonText : connectButtonText}
+            </button>
           </div>
         </div>
       </div>
-    );
-  }
+
+      {/* Mobile Footer Navigation */}
+      <div className="mobile-footer">
+        <div className="footer-nav">
+          <a href="https://monbridgedex.xyz" className="footer-nav-item">
+            <svg viewBox="0 0 24 24">
+              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+            </svg>
+            Home
+          </a>
+          <a href="https://monbridgedex.xyz/swap" className="footer-nav-item">
+            <svg viewBox="0 0 24 24">
+              <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/>
+            </svg>
+            Swap
+          </a>
+          <div className="footer-nav-item active">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/>
+            </svg>
+            Bridge
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default App;
