@@ -93,6 +93,7 @@ function App() {
   const [showFromChainDropdown, setShowFromChainDropdown] = useState(false);
   const [showToChainDropdown, setShowToChainDropdown] = useState(false);
   const [showFromTokenDropdown, setShowFromTokenDropdown] = useState(false);
+  const [estimatedGasCost, setEstimatedGasCost] = useState('--');
 
   // Storage functions first
   const saveNotificationsToStorage = useCallback((notifs) => {
@@ -262,6 +263,53 @@ function App() {
       console.warn('Failed to clear wallet connection:', error);
     }
   };
+
+  const getGasCostEstimate = useCallback(async () => {
+    if (!signer || !amount || parseFloat(amount) <= 0) {
+      setEstimatedGasCost('--');
+      return;
+    }
+
+    try {
+      const fromConfig = CONTRACTS[state.fromChain];
+      const toConfig = CONTRACTS[state.toChain];
+
+      // Verify we're on the correct chain
+      const currentNetwork = await provider.getNetwork();
+      if (currentNetwork.chainId !== BigInt(fromConfig.chainId)) {
+        setEstimatedGasCost('Switch chain first');
+        return;
+      }
+
+      const adapter = new ethers.Contract(fromConfig.adapter, OFT_ADAPTER_ABI, signer);
+      const token = new ethers.Contract(fromConfig.token, ERC20_ABI, signer);
+
+      const decimals = await token.decimals();
+      const amountLD = ethers.parseUnits(amount, decimals);
+
+      const gasLimit = 900000n;
+      const extraOptions = ethers.solidityPacked(['uint16', 'uint256'], [1, gasLimit]);
+
+      const sendParam = {
+        dstEid: toConfig.endpointId,
+        to: ethers.zeroPadValue(currentAccount, 32),
+        amountLD, 
+        minAmountLD: amountLD,
+        extraOptions: extraOptions,
+        composeMsg: '0x', 
+        oftCmd: '0x'
+      };
+
+      const [nativeFee] = await adapter.quoteSend(sendParam, false);
+      const formattedFee = ethers.formatEther(nativeFee);
+      const nativeSymbol = fromConfig.name === 'Monad' ? 'MON' : 'ETH';
+      
+      setEstimatedGasCost(`~${parseFloat(formattedFee).toFixed(6)} ${nativeSymbol}`);
+    } catch (error) {
+      console.error('Error getting gas estimate:', error);
+      setEstimatedGasCost('Error getting quote');
+    }
+  }, [signer, amount, state.fromChain, state.toChain, currentAccount, provider]);
 
   const addNotification = (fromChain, toChain, status, txHash, amountValue, errorMessage = null) => {
     const fromConfig = CONTRACTS[fromChain];
@@ -823,6 +871,19 @@ function App() {
     updateBalance();
   }, [updateBalance]);
 
+  // Update gas cost estimate when amount or chains change
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      if (isConnected && amount) {
+        getGasCostEstimate();
+      } else {
+        setEstimatedGasCost('--');
+      }
+    }, 500); // Debounce to avoid too many API calls
+
+    return () => clearTimeout(debounceTimer);
+  }, [amount, state.fromChain, state.toChain, isConnected, getGasCostEstimate]);
+
   // Start status polling when there are active notifications
   useEffect(() => {
     const activeCount = notifications.filter(n => 
@@ -848,7 +909,7 @@ function App() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  const unviewedCount = notifications.filter(n => !n.viewed).length;
+  The code has been modified to include a desktop header with navigation and wallet connection, along with adjusted mobile view and navigation.  const unviewedCount = notifications.filter(n => !n.viewed).length;
   const fromConfig = CONTRACTS[state.fromChain];
   const toConfig = CONTRACTS[state.toChain];
 
@@ -1256,6 +1317,10 @@ function App() {
 
                 <div className="amount-section">
                   <div className="to-amount">{amount || '0.0'}</div>
+                  <div className="gas-estimate">
+                    <span className="gas-label">Estimated bridge cost:</span>
+                    <span className="gas-cost">{estimatedGasCost}</span>
+                  </div>
                 </div>
               </div>
 
