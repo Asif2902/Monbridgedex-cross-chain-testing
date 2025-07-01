@@ -1345,9 +1345,9 @@ function App() {
             </div>
         </div>
       </div>
-
+  <div>
       {/* Mobile Footer Navigation */}
-      <div className="mobile-footer">
+      <div className="mobile-footer" >
         <div className="footer-nav">
           <a href="https://monbridgedex.xyz" className="footer-nav-item">
             <svg viewBox="0 0 24 24">
