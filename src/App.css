@@ -231,8 +231,9 @@ body {
   padding: 20px 10px 90px 10px;
   display: flex;
   justify-content: center;
-  align-items: center;
-  min-height: 100vh;
+  align-items: flex-start;
+  min-height: calc(100vh - 120px);
+  padding-top: max(60px, 10px);
 }
 
 .bridge-card {
@@ -246,24 +247,18 @@ body {
 
 .header {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   position: relative;
 }
 
 .header h1 {
-  font-size: clamp(1.5rem, 4vw, 2rem);
+  font-size: clamp(1.4rem, 4vw, 1.8rem);
   font-weight: 700;
   background: linear-gradient(135deg, #6366f1, #8b5cf6);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  margin-bottom: 8px;
-}
-
-.header .subtitle {
-  font-size: clamp(0.8rem, 2.5vw, 0.9rem);
-  color: var(--text-muted);
-  font-weight: 500;
+  margin-bottom: 0;
 }
 
 .notification-bell {
@@ -434,9 +429,9 @@ body {
 .chain-panel {
   background: linear-gradient(135deg, rgba(51, 65, 85, 0.1), rgba(30, 41, 59, 0.2));
   border: 1px solid var(--border-color);
-  padding: 16px;
-  border-radius: 16px;
-  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 8px;
   transition: all 0.3s ease;
 }
 
@@ -449,7 +444,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .panel-label {
@@ -467,8 +462,8 @@ body {
   background-color: rgba(51, 65, 85, 0.2);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 12px;
+  padding: 10px;
+  margin-bottom: 8px;
 }
 
 .token-chain-row {
@@ -548,7 +543,7 @@ body {
 }
 
 .amount-section {
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .amount-input {
@@ -556,11 +551,11 @@ body {
   background: transparent;
   border: none;
   color: var(--text-color);
-  font-size: clamp(1.2rem, 4vw, 1.5rem);
+  font-size: clamp(1.1rem, 4vw, 1.3rem);
   font-weight: 600;
   outline: none;
   text-align: center;
-  padding: 12px;
+  padding: 10px;
   border-radius: 8px;
   background-color: rgba(51, 65, 85, 0.2);
   border: 1px solid var(--border-color);
@@ -598,16 +593,44 @@ body {
   opacity: 0.5;
 }
 
+.percentage-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.percentage-button {
+  flex: 1;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: var(--primary-color);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.percentage-button:hover {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: var(--primary-color);
+}
+
+.percentage-button:active {
+  transform: scale(0.95);
+}
+
 .gas-estimate {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 12px;
-  padding: 8px 12px;
+  margin-top: 8px;
+  padding: 6px 10px;
   background: rgba(99, 102, 241, 0.05);
   border: 1px solid rgba(99, 102, 241, 0.1);
-  border-radius: 8px;
-  font-size: clamp(0.75rem, 2.5vw, 0.85rem);
+  border-radius: 6px;
+  font-size: clamp(0.7rem, 2.5vw, 0.8rem);
 }
 
 .gas-label {
@@ -624,7 +647,7 @@ body {
 .swap-container {
   display: flex;
   justify-content: center;
-  margin: -6px 0 12px 0;
+  margin: -4px 0 8px 0;
   position: relative;
   z-index: 2;
 }
@@ -656,14 +679,14 @@ body {
 
 .action-button {
   width: 100%;
-  padding: 16px;
+  padding: 12px;
   font-size: clamp(0.9rem, 3vw, 1rem);
   font-weight: 600;
   border: none;
-  border-radius: 16px;
+  border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
-  margin-top: 20px;
+  margin-top: 12px;
   position: relative;
   overflow: hidden;
 }
@@ -695,6 +718,25 @@ body {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none !important;
+}
+
+.bridge-footer {
+  text-align: center;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(51, 65, 85, 0.3);
+}
+
+.footer-text {
+  font-size: clamp(0.7rem, 2vw, 0.8rem);
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.footer-text.powered {
+  font-size: clamp(0.65rem, 1.8vw, 0.75rem);
+  opacity: 0.7;
+  margin-top: 2px;
 }
 
 .future-notice {
@@ -826,12 +868,12 @@ body {
 /* Mobile responsive styles */
 @media (max-width: 480px) {
   .container {
-    padding: 70px 5px 90px 5px;
+    padding: 60px 5px 80px 5px;
   }
 
   .bridge-card {
-    padding: 16px;
-    border-radius: 16px;
+    padding: 12px;
+    border-radius: 12px;
   }
 
   .mobile-header {
@@ -863,11 +905,11 @@ body {
   }
 
   .chain-panel {
-    padding: 12px;
+    padding: 8px;
   }
 
   .selection-container {
-    padding: 10px;
+    padding: 8px;
   }
 
   .token-selector, .chain-selector {
