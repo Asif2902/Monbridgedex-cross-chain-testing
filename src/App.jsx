@@ -995,8 +995,6 @@ function App() {
         <div className="bridge-card">
           <div className="header">
             <h1>Mon Bridge DEX</h1>
-            <div className="subtitle">Cross Chain Bridge</div>
-            <div className="subtitle" style={{marginTop: '4px', opacity: 0.7}}>Powered by LayerZero</div>
 
             <button className="notification-bell" onClick={(e) => { e.stopPropagation(); toggleNotifications(); }}>
               <svg viewBox="0 0 24 24">
@@ -1231,6 +1229,43 @@ function App() {
                   </div>
                 </div>
 
+                <div className="percentage-buttons">
+                  <button 
+                    className="percentage-button" 
+                    onClick={() => {
+                      if (balance !== '--' && balance !== 'Error loading') {
+                        const balanceValue = parseFloat(balance.split(' ')[0]);
+                        const amount25 = (balanceValue * 0.25).toFixed(6);
+                        setAmount(amount25.replace(/\.?0+$/, ''));
+                      }
+                    }}
+                  >
+                    25%
+                  </button>
+                  <button 
+                    className="percentage-button" 
+                    onClick={() => {
+                      if (balance !== '--' && balance !== 'Error loading') {
+                        const balanceValue = parseFloat(balance.split(' ')[0]);
+                        const amount50 = (balanceValue * 0.5).toFixed(6);
+                        setAmount(amount50.replace(/\.?0+$/, ''));
+                      }
+                    }}
+                  >
+                    50%
+                  </button>
+                  <button 
+                    className="percentage-button" 
+                    onClick={() => {
+                      if (balance !== '--' && balance !== 'Error loading') {
+                        const balanceValue = parseFloat(balance.split(' ')[0]);
+                        setAmount(balanceValue.toString());
+                      }
+                    }}
+                  >
+                    100%
+                  </button>
+                </div>
                 <div className="amount-section">
                   <input 
                     type="number" 
@@ -1339,6 +1374,11 @@ function App() {
               >
                 {isConnected ? bridgeButtonText : connectButtonText}
               </button>
+
+              <div className="bridge-footer">
+                <div className="footer-text">Cross Chain Bridge</div>
+                <div className="footer-text powered">Powered by LayerZero</div>
+              </div>
             </div>
         </div>
       </div>
