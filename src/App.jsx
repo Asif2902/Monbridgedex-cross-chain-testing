@@ -1,72 +1,7 @@
 
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import './App.css';
-import { WagmiProvider } from 'wagmi';
-import { RainbowKitProvider, ConnectButton } from '@rainbow-me/rainbowkit';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
-import { sepolia, base } from 'wagmi/chains';
-import '@rainbow-me/rainbowkit/styles.css';
-
-
-const monadTestnet = {
-  id: 10143,
-  name: 'Monad Testnet',
-  nativeCurrency: {
-    decimals: 18,
-    name: 'MON',
-    symbol: 'MON',
-  },
-  rpcUrls: {
-    default: {
-      http: ['https://testnet-rpc.monad.xyz'],
-    },
-  },
-  blockExplorers: {
-    default: { name: 'Monad Explorer', url: 'https://testnet.monad.xyz' },
-  },
-  testnet: true,
-};
-
-const BaseSepolia = {
-  id: 84532,
-  name: 'Base Sepolia',
-  network: 'BaseSepolia',
-  nativeCurrency: {
-    name: 'Sepolia Ether',
-    symbol: 'ETH',
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: {
-      // Light/dev default from Base docs:
-      http: ['https://sepolia.base.org'],
-    },
-    public: {
-      // Better reliability via publicnode:
-      http: ['https://base-sepolia-rpc.publicnode.com'],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: 'BaseScan',
-      url: 'https://sepolia.basescan.org',
-    },
-  },
-  testnet: true,
-};
-
-// RainbowKit configuration
-const config = getDefaultConfig({
-  appName: 'Mon Bridge DEX',
-  projectId: 'fd923eab39a4ca459b3fa3def4c77a70', 
-  chains: [monadTestnet, sepolia, BaseSepolia],
-  ssr: false,
-});
-
-const queryClient = new QueryClient();
 
 const CONTRACTS = {
   monad: {
@@ -136,7 +71,7 @@ const STORAGE_KEYS = {
   WALLET_ADDRESS: 'walletAddress'
 };
 
-function AppContent() {
+function App() {
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
   const [currentAccount, setCurrentAccount] = useState(null);
@@ -918,104 +853,6 @@ function AppContent() {
   const fromConfig = CONTRACTS[state.fromChain];
   const toConfig = CONTRACTS[state.toChain];
 
-  // Custom RainbowKit Connect Button Component
-  const CustomConnectButton = () => {
-    return (
-      <ConnectButton.Custom>
-        {({
-          account,
-          chain,
-          openAccountModal,
-          openChainModal,
-          openConnectModal,
-          authenticationStatus,
-          mounted,
-        }) => {
-          // Show loading state while RainbowKit is mounting
-          if (!mounted || authenticationStatus === 'loading') {
-            return (
-              <button 
-                className="action-button connect" 
-                disabled={true}
-              >
-                Loading...
-              </button>
-            );
-          }
-
-          // Not connected - show connect button
-          if (!account) {
-            return (
-              <button 
-                className="action-button connect" 
-                onClick={openConnectModal}
-                disabled={connectButtonDisabled}
-              >
-                {connectButtonText}
-              </button>
-            );
-          }
-
-          // Connected - show chain switch or bridge button based on app state
-          if (needsChainSwitch) {
-            return (
-              <button 
-                className="action-button bridge" 
-                onClick={() => {
-                  // Call your existing switch chain logic
-                  switchToChain(state.fromChain);
-                }}
-                disabled={bridgeButtonDisabled}
-              >
-                Switch Chain
-              </button>
-            );
-          }
-
-          // Connected and on correct chain - show bridge button
-          return (
-            <button 
-              className="action-button bridge" 
-              onClick={() => {
-                // Call your existing bridge logic
-                bridgeTokens();
-              }}
-              disabled={bridgeButtonDisabled}
-            >
-              {bridgeButtonText}
-            </button>
-          );
-        }}
-      </ConnectButton.Custom>
-    );
-  };
-
-  // Connected wallet info component
-  const WalletInfo = () => {
-    return (
-      <ConnectButton.Custom>
-        {({ account, mounted }) => {
-          if (!mounted || !account) return null;
-          
-          return (
-            <div className="wallet-info">
-              <ConnectButton.Custom>
-                {({ openAccountModal }) => (
-                  <button 
-                    className="wallet-address-button"
-                    onClick={openAccountModal}
-                  >
-                    {account.displayName || `${account.address.slice(0, 6)}...${account.address.slice(-4)}`}
-                  </button>
-                )}
-              </ConnectButton.Custom>
-            </div>
-          );
-        }}
-      </ConnectButton.Custom>
-    );
-  };
-
   return (
     <div>
       <div className="background">
@@ -1359,8 +1196,13 @@ function AppContent() {
                 🚀 More tokens and chains coming soon! Stay tuned for updates.
               </div>
 
-              <CustomConnectButton />
-              <WalletInfo />
+              <button 
+                className="action-button bridge" 
+                onClick={handleMainAction}
+                disabled={bridgeButtonDisabled || connectButtonDisabled}
+              >
+                {isConnected ? bridgeButtonText : connectButtonText}
+              </button>
             </div>
         </div>
       </div>
@@ -1368,17 +1210,4 @@ function AppContent() {
   );
 }
 
-function App() {
-  return (
-    <WagmiProvider config={config}>
-      <QueryClientProvider client={queryClient}>
-        <RainbowKitProvider>
-          <AppContent />
-        </RainbowKitProvider>
-      </QueryClientProvider>
-    </WagmiProvider>
-  );
-}
-
 export default App;
-
