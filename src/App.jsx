@@ -1329,10 +1329,8 @@ function App() {
                 <div className="gas-estimate">
                   <span className="gas-label">Estimated bridge cost:</span>
                   <span className="gas-cost">{estimatedGasCost}</span>
-                </div></div>
+                </div>
               </div>
-
-              
 
               <button 
                 className="action-button bridge" 
