@@ -131,6 +131,49 @@ body {
   fill: currentColor;
 }
 
+.mobile-header {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(26, 26, 26, 0.95);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border-color);
+  z-index: 1000;
+  padding: 12px 20px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.mobile-header-wallet-button {
+  background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+  border: none;
+  border-radius: 12px;
+  padding: 8px 16px;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.85rem;
+}
+
+.mobile-header-wallet-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+}
+
+.mobile-header-wallet-button.connected {
+  background: rgba(16, 185, 129, 0.2);
+  border: 1px solid var(--success-color);
+  color: var(--success-color);
+}
+
+.mobile-header-wallet-button.connected:hover {
+  background: rgba(16, 185, 129, 0.3);
+}
+
 .mobile-footer {
   display: none;
   position: fixed;
@@ -142,6 +185,14 @@ body {
   border-top: 1px solid var(--border-color);
   z-index: 1000;
   padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+}
+
+.footer-nav {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  height: 100%;
+  padding: 0 20px;
 }
 
 .footer-nav-item {
@@ -156,6 +207,7 @@ body {
   font-size: 0.7rem;
   font-weight: 500;
   transition: all 0.2s ease;
+  max-width: 80px;
 }
 
 .footer-nav-item:hover {
@@ -170,10 +222,6 @@ body {
   width: 20px;
   height: 20px;
   fill: currentColor;
-}
-
-.mobile-footer {
-  display: flex;
 }
 
 .container {
@@ -744,7 +792,7 @@ body {
 /* Mobile responsive styles */
 @media (max-width: 480px) {
   .container {
-    padding: 10px 5px 90px 5px;
+    padding: 70px 5px 90px 5px;
   }
 
   .bridge-card {
@@ -752,8 +800,12 @@ body {
     border-radius: 16px;
   }
 
-  .mobile-footer {
+  .mobile-header {
     display: flex;
+  }
+
+  .mobile-footer {
+    display: block;
   }
 
   .token-chain-row {
