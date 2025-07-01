@@ -909,8 +909,7 @@ function App() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  
- const unviewedCount = notifications.filter(n => !n.viewed).length;
+  The code has been modified to include a desktop header with navigation and wallet connection, along with adjusted mobile view and navigation.  const unviewedCount = notifications.filter(n => !n.viewed).length;
   const fromConfig = CONTRACTS[state.fromChain];
   const toConfig = CONTRACTS[state.toChain];
 
@@ -1345,27 +1344,25 @@ function App() {
             </div>
         </div>
       </div>
-    <div>
+
       {/* Mobile Footer Navigation */}
       <div className="mobile-footer">
         <div className="footer-nav">
           <a href="https://monbridgedex.xyz" className="footer-nav-item">
             <svg viewBox="0 0 24 24">
-              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+              <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
             </svg>
             Home
           </a>
-
           <a href="https://monbridgedex.xyz/swap" className="footer-nav-item">
             <svg viewBox="0 0 24 24">
-              <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z" />
+              <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"/>
             </svg>
             Swap
           </a>
-
           <div className="footer-nav-item active">
             <svg viewBox="0 0 24 24">
-              <path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z" />
+              <path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/>
             </svg>
             Bridge
           </div>
