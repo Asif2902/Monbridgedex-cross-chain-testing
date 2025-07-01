@@ -576,16 +576,26 @@ body {
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
 }
 
-.to-amount {
-  font-size: clamp(1.1rem, 4vw, 1.3rem);
-  font-weight: 600;
-  color: var(--text-color);
-  background: none;
-  border: none;
-  outline: none;
+.to-amount-input {
   width: 100%;
-  text-align: right;
+  background: transparent;
+  border: none;
+  color: var(--text-color);
+  font-size: clamp(1.2rem, 4vw, 1.5rem);
+  font-weight: 600;
+  outline: none;
+  text-align: center;
+  padding: 12px;
+  border-radius: 8px;
+  background-color: rgba(51, 65, 85, 0.2);
+  border: 1px solid var(--border-color);
   opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.to-amount-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
 }
 
 .gas-estimate {
