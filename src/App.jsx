@@ -909,7 +909,8 @@ function App() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  The code has been modified to include a desktop header with navigation and wallet connection, along with adjusted mobile view and navigation.  const unviewedCount = notifications.filter(n => !n.viewed).length;
+  
+ const unviewedCount = notifications.filter(n => !n.viewed).length;
   const fromConfig = CONTRACTS[state.fromChain];
   const toConfig = CONTRACTS[state.toChain];
 
