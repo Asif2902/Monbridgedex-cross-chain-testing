@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
+import { useAccount, useConnect, useDisconnect, useChainId, useSwitchChain } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import './App.css';
 
 const CONTRACTS = {
@@ -71,9 +73,15 @@ const STORAGE_KEYS = {
 };
 
 function App() {
+  // Wagmi hooks
+  const { address, isConnected } = useAccount();
+  const chainId = useChainId();
+  const { switchChain } = useSwitchChain();
+  const { disconnect } = useDisconnect();
+
+  // Local state
   const [provider, setProvider] = useState(null);
   const [signer, setSigner] = useState(null);
-  const [currentAccount, setCurrentAccount] = useState(null);
   const [state, setState] = useState({
     fromChain: 'monad',
     toChain: 'sepolia'
@@ -86,14 +94,16 @@ function App() {
   const [bridgeButtonDisabled, setBridgeButtonDisabled] = useState(false);
   const [connectButtonText, setConnectButtonText] = useState(BUTTON_STATES.CONNECT);
   const [connectButtonDisabled, setConnectButtonDisabled] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
   const [needsChainSwitch, setNeedsChainSwitch] = useState(false);
-  const [currentChainId, setCurrentChainId] = useState(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showFromChainDropdown, setShowFromChainDropdown] = useState(false);
   const [showToChainDropdown, setShowToChainDropdown] = useState(false);
   const [showFromTokenDropdown, setShowFromTokenDropdown] = useState(false);
   const [estimatedGasCost, setEstimatedGasCost] = useState('--');
+
+  // Derived values
+  const currentAccount = address;
+  const currentChainId = chainId;
 
   // Storage functions first
   const saveNotificationsToStorage = useCallback((notifs) => {
@@ -275,8 +285,7 @@ function App() {
       const toConfig = CONTRACTS[state.toChain];
 
       // Verify we're on the correct chain
-      const currentNetwork = await provider.getNetwork();
-      if (currentNetwork.chainId !== BigInt(fromConfig.chainId)) {
+      if (currentChainId !== fromConfig.chainId) {
         setEstimatedGasCost('Switch chain first');
         return;
       }
@@ -292,7 +301,7 @@ function App() {
 
       const sendParam = {
         dstEid: toConfig.endpointId,
-        to: ethers.zeroPadValue(currentAccount, 32),
+        to: ethers.zeroPadValue(address, 32),
         amountLD, 
         minAmountLD: amountLD,
         extraOptions: extraOptions,
@@ -309,7 +318,7 @@ function App() {
       console.error('Error getting gas estimate:', error);
       setEstimatedGasCost('Error getting quote');
     }
-  }, [signer, amount, state.fromChain, state.toChain, currentAccount, provider]);
+  }, [signer, amount, state.fromChain, state.toChain, address, currentChainId]);
 
   const addNotification = (fromChain, toChain, status, txHash, amountValue, errorMessage = null) => {
     const fromConfig = CONTRACTS[fromChain];
@@ -356,20 +365,15 @@ function App() {
 
 
 
-  const checkCurrentChain = useCallback(async () => {
-    if (!provider) {
-      setCurrentChainId(null);
+  const checkCurrentChain = useCallback(() => {
+    if (!isConnected) {
       setNeedsChainSwitch(false);
       return;
     }
 
     try {
-      const network = await provider.getNetwork();
-      const chainId = Number(network.chainId);
-      setCurrentChainId(chainId);
-
       const fromConfig = CONTRACTS[state.fromChain];
-      const needsSwitch = chainId !== fromConfig.chainId;
+      const needsSwitch = currentChainId !== fromConfig.chainId;
       setNeedsChainSwitch(needsSwitch);
 
       if (needsSwitch) {
@@ -381,10 +385,10 @@ function App() {
       console.error('Error checking current chain:', error);
       setNeedsChainSwitch(false);
     }
-  }, [provider, state.fromChain]);
+  }, [isConnected, currentChainId, state.fromChain]);
 
   const updateBalance = useCallback(async () => {
-    if (!currentAccount) {
+    if (!address) {
       setBalance('--');
       setDestinationBalance('--');
       return;
@@ -396,7 +400,7 @@ function App() {
       const fromChainProvider = new ethers.JsonRpcProvider(fromConfig.rpcUrl);
       const fromToken = new ethers.Contract(fromConfig.token, ERC20_ABI, fromChainProvider);
       const [fromTokenBalance, fromDecimals] = await Promise.all([
-        fromToken.balanceOf(currentAccount), 
+        fromToken.balanceOf(address), 
         fromToken.decimals()
       ]);
       const formattedFromBalance = ethers.formatUnits(fromTokenBalance, fromDecimals);
@@ -407,7 +411,7 @@ function App() {
       const toChainProvider = new ethers.JsonRpcProvider(toConfig.rpcUrl);
       const toToken = new ethers.Contract(toConfig.token, ERC20_ABI, toChainProvider);
       const [toTokenBalance, toDecimals] = await Promise.all([
-        toToken.balanceOf(currentAccount), 
+        toToken.balanceOf(address), 
         toToken.decimals()
       ]);
       const formattedToBalance = ethers.formatUnits(toTokenBalance, toDecimals);
@@ -417,15 +421,12 @@ function App() {
       setBalance('Error loading');
       setDestinationBalance('Error loading');
     }
-  }, [currentAccount, state.fromChain, state.toChain]);
+  }, [address, state.fromChain, state.toChain]);
 
   const switchToChain = async (chainKey) => {
-    if (!provider) return false;
-
     const targetChainId = CONTRACTS[chainKey].chainId;
-    const network = await provider.getNetwork();
 
-    if (network.chainId === BigInt(targetChainId)) {
+    if (currentChainId === targetChainId) {
       return true; // Already on correct chain
     }
 
@@ -433,31 +434,15 @@ function App() {
       setBridgeButtonText(BUTTON_STATES.SWITCHING_CHAIN);
       setBridgeButtonDisabled(true);
 
-      await window.ethereum.request({ 
-        method: 'wallet_switchEthereumChain', 
-        params: [{ chainId: CONTRACTS[chainKey].chainIdHex }] 
-      });
+      await switchChain({ chainId: targetChainId });
 
       // Wait for the network to fully switch
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Create new provider and signer instances
-      const newProvider = new ethers.BrowserProvider(window.ethereum);
-      const newSigner = await newProvider.getSigner();
-
-      // Verify the chain switch was successful
-      const newNetwork = await newProvider.getNetwork();
-      if (newNetwork.chainId !== BigInt(targetChainId)) {
-        throw new Error('Chain switch verification failed');
-      }
-
-      setProvider(newProvider);
-      setSigner(newSigner);
-      setCurrentChainId(Number(newNetwork.chainId));
       setNeedsChainSwitch(false);
       setBridgeButtonText(BUTTON_STATES.BRIDGE);
 
-      console.log(`Successfully switched to ${CONTRACTS[chainKey].name} (Chain ID: ${newNetwork.chainId})`);
+      console.log(`Successfully switched to ${CONTRACTS[chainKey].name} (Chain ID: ${targetChainId})`);
 
       // Update balance after successful chain switch
       setTimeout(() => {
@@ -467,142 +452,180 @@ function App() {
       return true;
 
     } catch (error) {
-      if (error.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: CONTRACTS[chainKey].chainIdHex, 
-              chainName: CONTRACTS[chainKey].name, 
-              rpcUrls: [CONTRACTS[chainKey].rpcUrl],
-              nativeCurrency: { 
-                name: chainKey === 'monad' ? 'MON' : 'ETH', 
-                symbol: chainKey === 'monad' ? 'MON' : 'ETH', 
-                decimals: 18 
-              }
-            }]
-          });
-
-          // Wait for the network to be added and switch
-          await new Promise(resolve => setTimeout(resolve, 3000));
-
-          const newProvider = new ethers.BrowserProvider(window.ethereum);
-          const newSigner = await newProvider.getSigner();
-
-          // Verify the chain addition and switch was successful
-          const newNetwork = await newProvider.getNetwork();
-          if (newNetwork.chainId !== BigInt(targetChainId)) {
-            throw new Error('Chain addition verification failed');
-          }
-
-          setProvider(newProvider);
-          setSigner(newSigner);
-          setCurrentChainId(Number(newNetwork.chainId));
-          setNeedsChainSwitch(false);
-          setBridgeButtonText(BUTTON_STATES.BRIDGE);
-
-          console.log(`Successfully added and switched to ${CONTRACTS[chainKey].name}`);
-
-          // Update balance after successful chain addition
-          setTimeout(() => {
-            updateBalance();
-          }, 500);
-
-          return true;
-
-        } catch (addError) {
-          console.error('Failed to add chain:', addError);
-          const errorMsg = `Failed to add ${CONTRACTS[chainKey].name} chain. Please add it manually.`;
-          setBridgeButtonText('Switch Chain');
-          setBridgeButtonDisabled(false);
-          throw new Error(errorMsg);
-        }
-      } else if (error.code === 4001) {
-        const errorMsg = `User rejected switching to ${CONTRACTS[chainKey].name} chain`;
-        setBridgeButtonText('Switch Chain');
-        setBridgeButtonDisabled(false);
-        return false;
-      } else {
-        console.error('Failed to switch chain:', error);
-        const errorMsg = `Failed to switch to ${CONTRACTS[chainKey].name} chain: ${error.message}`;
-        setBridgeButtonText('Switch Chain');
-        setBridgeButtonDisabled(false);
-        throw new Error(errorMsg);
-      }
+      console.error('Failed to switch chain:', error);
+      const errorMsg = `Failed to switch to ${CONTRACTS[chainKey].name} chain: ${error.message}`;
+      setBridgeButtonText('Switch Chain');
+      setBridgeButtonDisabled(false);
+      throw new Error(errorMsg);
     } finally {
       setBridgeButtonDisabled(false);
     }
   };
 
-  const connectWallet = async () => {
-    if (!window.ethereum) {
-      console.error('MetaMask is not installed.');
-      return;
-    }
-
-    try {
-      setConnectButtonText(BUTTON_STATES.CONNECTING);
-      setConnectButtonDisabled(true);
-
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const account = ethers.getAddress(accounts[0]);
-      const newProvider = new ethers.BrowserProvider(window.ethereum);
-      const newSigner = await newProvider.getSigner();
-
-      setCurrentAccount(account);
-      setProvider(newProvider);
-      setSigner(newSigner);
-      setIsConnected(true);
-
-      // Reset button states after successful connection
-      setConnectButtonText(BUTTON_STATES.CONNECT);
-      setConnectButtonDisabled(false);
-      setBridgeButtonText(BUTTON_STATES.BRIDGE);
-      setBridgeButtonDisabled(false);
-
-      saveWalletConnection(account);
-      console.log(`Wallet connected: ${account}`);
-
-      // Setup event listeners
-      window.ethereum.on('accountsChanged', async (accounts) => {
-        if (accounts.length === 0) {
-          setCurrentAccount(null);
-          setSigner(null);
-          setIsConnected(false);
-          clearWalletConnection();
-          setConnectButtonText(BUTTON_STATES.CONNECT);
-          setConnectButtonDisabled(false);
-          console.log('Wallet disconnected.');
-        } else {
-          const newAccount = ethers.getAddress(accounts[0]);
-          if (newAccount !== currentAccount) {
-            setCurrentAccount(newAccount);
-            saveWalletConnection(newAccount);
-            console.log(`Account changed to: ${newAccount}`);
-          }
-        }
-      });
-
-      window.ethereum.on('chainChanged', async () => {
-        if (provider) {
+  // Setup ethers provider and signer when wallet connects
+  useEffect(() => {
+    const setupEthers = async () => {
+      if (isConnected && window.ethereum) {
+        try {
           const newProvider = new ethers.BrowserProvider(window.ethereum);
           const newSigner = await newProvider.getSigner();
           setProvider(newProvider);
           setSigner(newSigner);
-
-          // Check if we need to switch chain after network change
-          setTimeout(() => {
-            checkCurrentChain();
-            updateBalance();
-          }, 1000);
+          saveWalletConnection(address);
+          console.log(`Wallet connected: ${address}`);
+        } catch (error) {
+          console.error('Failed to setup ethers:', error);
         }
-      });
+      } else {
+        setProvider(null);
+        setSigner(null);
+        clearWalletConnection();
+      }
+    };
 
-    } catch (error) {
-      console.error(`Failed to connect wallet: ${error.message}`);
-      setConnectButtonText(BUTTON_STATES.CONNECT);
-      setConnectButtonDisabled(false);
-    }
+    setupEthers();
+  }, [isConnected, address]);
+
+  // Custom connect button component that uses RainbowKit internally
+  const CustomConnectButton = () => {
+    return (
+      <ConnectButton.Custom>
+        {({
+          account,
+          chain,
+          openAccountModal,
+          openChainModal,
+          openConnectModal,
+          authenticationStatus,
+          mounted,
+        }) => {
+          const ready = mounted && authenticationStatus !== 'loading';
+          const connected =
+            ready &&
+            account &&
+            chain &&
+            (!authenticationStatus ||
+              authenticationStatus === 'authenticated');
+
+          return (
+            <div
+              {...(!ready && {
+                'aria-hidden': true,
+                'style': {
+                  opacity: 0,
+                  pointerEvents: 'none',
+                  userSelect: 'none',
+                },
+              })}
+            >
+              {(() => {
+                if (!connected) {
+                  return (
+                    <button 
+                      className="mobile-header-wallet-button"
+                      onClick={openConnectModal} 
+                      type="button"
+                      disabled={connectButtonDisabled}
+                    >
+                      <div className="wallet-info">
+                        <svg viewBox="0 0 24 24">
+                          <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                        </svg>
+                        {connectButtonText}
+                      </div>
+                    </button>
+                  );
+                }
+
+                return (
+                  <button 
+                    className="mobile-header-wallet-button connected"
+                    onClick={openAccountModal} 
+                    type="button"
+                  >
+                    <div className="wallet-info">
+                      <div className="wallet-status">●</div>
+                      <span>{account.address ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : 'Connected'}</span>
+                    </div>
+                  </button>
+                );
+              })()}
+            </div>
+          );
+        }}
+      </ConnectButton.Custom>
+    );
+  };
+
+  // Desktop version of custom connect button
+  const DesktopConnectButton = () => {
+    return (
+      <ConnectButton.Custom>
+        {({
+          account,
+          chain,
+          openAccountModal,
+          openChainModal,
+          openConnectModal,
+          authenticationStatus,
+          mounted,
+        }) => {
+          const ready = mounted && authenticationStatus !== 'loading';
+          const connected =
+            ready &&
+            account &&
+            chain &&
+            (!authenticationStatus ||
+              authenticationStatus === 'authenticated');
+
+          return (
+            <div
+              {...(!ready && {
+                'aria-hidden': true,
+                'style': {
+                  opacity: 0,
+                  pointerEvents: 'none',
+                  userSelect: 'none',
+                },
+              })}
+            >
+              {(() => {
+                if (!connected) {
+                  return (
+                    <button 
+                      className="header-wallet-button"
+                      onClick={openConnectModal} 
+                      type="button"
+                      disabled={connectButtonDisabled}
+                    >
+                      <div className="wallet-info">
+                        <svg viewBox="0 0 24 24">
+                          <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                        </svg>
+                        {connectButtonText}
+                      </div>
+                    </button>
+                  );
+                }
+
+                return (
+                  <button 
+                    className="header-wallet-button connected"
+                    onClick={openAccountModal} 
+                    type="button"
+                  >
+                    <div className="wallet-info">
+                      <div className="wallet-status">●</div>
+                      <span>{account.address ? `${account.address.slice(0, 6)}...${account.address.slice(-4)}` : 'Connected'}</span>
+                    </div>
+                  </button>
+                );
+              })()}
+            </div>
+          );
+        }}
+      </ConnectButton.Custom>
+    );
   };
 
   const bridgeTokens = async () => {
@@ -637,7 +660,7 @@ function App() {
       const decimals = await token.decimals();
       const amountLD = ethers.parseUnits(amountStr, decimals);
 
-      const tokenBalance = await token.balanceOf(currentAccount);
+      const tokenBalance = await token.balanceOf(address);
       if (tokenBalance < amountLD) {
         const formattedBalance = ethers.formatUnits(tokenBalance, decimals);
         throw new Error(`Insufficient balance: You have ${parseFloat(formattedBalance).toFixed(4)} MBD but need ${amountStr} MBD`);
@@ -652,7 +675,7 @@ function App() {
 
       const sendParam = {
         dstEid: toConfig.endpointId,
-        to: ethers.zeroPadValue(currentAccount, 32),
+        to: ethers.zeroPadValue(address, 32),
         amountLD, 
         minAmountLD: amountLD,
         extraOptions: extraOptions,
@@ -663,7 +686,7 @@ function App() {
       const [nativeFee] = await adapter.quoteSend(sendParam, false);
       console.log(`Quote: ${ethers.formatEther(nativeFee)} ${fromConfig.name === 'Monad' ? 'MON' : 'ETH'}`);
 
-      const nativeBalance = await provider.getBalance(currentAccount);
+      const nativeBalance = await provider.getBalance(address);
       if (nativeBalance < nativeFee) {
         const nativeSymbol = fromConfig.name === 'Monad' ? 'MON' : 'ETH';
         const requiredAmount = ethers.formatEther(nativeFee);
@@ -674,7 +697,7 @@ function App() {
       setBridgeButtonText(BUTTON_STATES.CHECKING_APPROVAL);
       console.log('Checking token approval...');
 
-      const allowance = await token.allowance(currentAccount, fromConfig.adapter);
+      const allowance = await token.allowance(address, fromConfig.adapter);
       if (allowance < amountLD) {
         setBridgeButtonText(BUTTON_STATES.APPROVING);
         console.log('Approving tokens...');
@@ -690,7 +713,7 @@ function App() {
       const tx = await adapter.send(
         sendParam, 
         { nativeFee, lzTokenFee: 0n }, 
-        currentAccount, 
+        address, 
         { value: nativeFee }
       );
       console.log(`Transaction sent: ${tx.hash}`);
@@ -770,7 +793,7 @@ function App() {
 
   const handleMainAction = async () => {
     if (!isConnected) {
-      await connectWallet();
+      // Connection is handled by RainbowKit button
       return;
     }
 
@@ -814,49 +837,9 @@ function App() {
     }
   };
 
-  // Auto-connect wallet on load
+  // Load notifications on mount
   useEffect(() => {
-    const autoConnect = async () => {
-      const { isConnected: wasConnected, savedAddress } = loadWalletConnection();
-
-      if (wasConnected && savedAddress && window.ethereum) {
-        try {
-          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-          const currentAddr = accounts.length > 0 ? ethers.getAddress(accounts[0]) : null;
-
-          if (currentAddr && currentAddr.toLowerCase() === savedAddress.toLowerCase()) {
-            setConnectButtonText(BUTTON_STATES.CONNECTING);
-            setConnectButtonDisabled(true);
-
-            const newProvider = new ethers.BrowserProvider(window.ethereum);
-            const newSigner = await newProvider.getSigner();
-
-            setProvider(newProvider);
-            setSigner(newSigner);
-            setCurrentAccount(currentAddr);
-            setIsConnected(true);
-
-            // Reset button states after successful connection
-            setConnectButtonText(BUTTON_STATES.CONNECT);
-            setConnectButtonDisabled(false);
-            setBridgeButtonText(BUTTON_STATES.BRIDGE);
-            setBridgeButtonDisabled(false);
-
-            console.log(`Auto-connected wallet: ${currentAddr}`);
-          } else {
-            clearWalletConnection();
-          }
-        } catch (error) {
-          console.warn('Auto-connect failed:', error);
-          clearWalletConnection();
-          setConnectButtonText(BUTTON_STATES.CONNECT);
-          setConnectButtonDisabled(false);
-        }
-      }
-    };
-
     loadNotificationsFromStorage();
-    autoConnect();
   }, [loadNotificationsFromStorage]);
 
   // Check current chain when wallet connects or from chain changes
@@ -909,7 +892,7 @@ function App() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  const unviewedCount = notifications.filter(n => !n.viewed).length;
+  The code has been modified to include a desktop header with navigation and wallet connection, along with adjusted mobile view and navigation.  const unviewedCount = notifications.filter(n => !n.viewed).length;
   const fromConfig = CONTRACTS[state.fromChain];
   const toConfig = CONTRACTS[state.toChain];
 
@@ -925,25 +908,7 @@ function App() {
 
       {/* Mobile Header */}
       <div className="mobile-header">
-        <button 
-          className={`mobile-header-wallet-button ${isConnected ? 'connected' : ''}`}
-          onClick={connectWallet}
-          disabled={connectButtonDisabled}
-        >
-          {isConnected ? (
-            <div className="wallet-info">
-              <div className="wallet-status">●</div>
-              <span>{currentAccount ? `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}` : 'Connected'}</span>
-            </div>
-          ) : (
-            <div className="wallet-info">
-              <svg viewBox="0 0 24 24">
-                <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-              </svg>
-              {connectButtonText}
-            </div>
-          )}
-        </button>
+        <CustomConnectButton />
       </div>
 
       {/* Desktop Header */}
@@ -969,25 +934,7 @@ function App() {
               Bridge
             </div>
           </div>
-          <button 
-            className={`header-wallet-button ${isConnected ? 'connected' : ''}`}
-            onClick={connectWallet}
-            disabled={connectButtonDisabled}
-          >
-            {isConnected ? (
-              <div className="wallet-info">
-                <div className="wallet-status">●</div>
-                <span>{currentAccount ? `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}` : 'Connected'}</span>
-              </div>
-            ) : (
-              <div className="wallet-info">
-                <svg viewBox="0 0 24 24">
-                  <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                </svg>
-                {connectButtonText}
-              </div>
-            )}
-          </button>
+          <DesktopConnectButton />
         </div>
       </div>
 
@@ -1329,8 +1276,10 @@ function App() {
                 <div className="gas-estimate">
                   <span className="gas-label">Estimated bridge cost:</span>
                   <span className="gas-cost">{estimatedGasCost}</span>
-                </div>
+                </div></div>
               </div>
+
+              
 
               <button 
                 className="action-button bridge" 
