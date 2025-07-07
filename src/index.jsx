@@ -5,9 +5,10 @@ import App from './App'
 import '@rainbow-me/rainbowkit/styles.css'
 
 import {
+  getDefaultConfig,
   RainbowKitProvider,
 } from '@rainbow-me/rainbowkit'
-import { WagmiProvider, createConfig, http } from 'wagmi'
+import { WagmiProvider } from 'wagmi'
 import {
   mainnet,
   sepolia,
@@ -17,7 +18,6 @@ import {
   QueryClientProvider,
   QueryClient,
 } from "@tanstack/react-query"
-import { injected, metaMask, walletConnect } from 'wagmi/connectors'
 
 // Define Monad testnet chain
 const monadTestnet = {
@@ -39,26 +39,10 @@ const monadTestnet = {
   testnet: true,
 }
 
-const config = createConfig({
+const config = getDefaultConfig({
+  appName: 'Mon Bridge Dex',
+  projectId: '931ae2f446138b9d543f1fc72f30efb1',
   chains: [monadTestnet, sepolia, baseSepolia],
-  connectors: [
-    injected(),
-    metaMask(),
-    walletConnect({ 
-      projectId: '931ae2f446138b9d543f1fc72f30efb1',
-      metadata: {
-        name: 'Mon Bridge Dex',
-        description: 'Cross Chain Bridge',
-        url: window.location.origin,
-        icons: [`${window.location.origin}/favicon.ico`]
-      }
-    })
-  ],
-  transports: {
-    [monadTestnet.id]: http('https://testnet-rpc.monad.xyz'),
-    [sepolia.id]: http('https://eth-sepolia.public.blastapi.io'),
-    [baseSepolia.id]: http('https://sepolia.base.org'),
-  },
   ssr: false,
 })
 
