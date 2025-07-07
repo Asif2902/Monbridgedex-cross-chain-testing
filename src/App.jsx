@@ -394,6 +394,27 @@ function App() {
     return interval;
   }, [notifications, checkTransactionStatus, updateNotificationStatus]);
 
+  // Check if current chain is supported
+  const isValidChain = useCallback(() => {
+    const supportedChainIds = [10143, 11155111, 84532]; // Monad, Sepolia, Base Sepolia
+    return supportedChainIds.includes(chainId);
+  }, [chainId]);
+
+  const getCurrentChainConfig = useCallback(() => {
+    return Object.entries(CONTRACTS).find(([key, config]) => config.chainId === chainId);
+  }, [chainId]);
+
+  // Update bridge button state based on chain validity
+  useEffect(() => {
+    if (isConnected && !isValidChain()) {
+      setBridgeButtonText('Switch to Supported Chain');
+      setBridgeButtonDisabled(false);
+    } else if (isConnected && isValidChain()) {
+      setBridgeButtonText(BUTTON_STATES.BRIDGE);
+      setBridgeButtonDisabled(false);
+    }
+  }, [isConnected, isValidChain]);
+
   // Check if chain switch is needed
   useEffect(() => {
     if (isConnected && chainId) {
@@ -449,7 +470,7 @@ function App() {
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  
+
 
   const handleSwitchChain = async () => {
     try {
@@ -549,18 +570,35 @@ function App() {
     }
   };
 
-  const handleMainAction = async () => {
+  const handleMainAction = useCallback(async () => {
     if (!isConnected) {
-      handleConnect();
+      // Will be handled by ConnectButton
       return;
     }
 
-    if (needsChainSwitch) {
-      await handleSwitchChain();
-    } else {
-      await bridgeTokens();
+    // Check if we're on the correct chain
+    const targetChainId = fromConfig.chainId;
+    if (chainId !== targetChainId) {
+      setNeedsChainSwitch(true);
+      setBridgeButtonText(BUTTON_STATES.SWITCHING_CHAIN);
+      setBridgeButtonDisabled(true);
+
+      try {
+        await switchChain({ chainId: targetChainId });
+        setNeedsChainSwitch(false);
+        setBridgeButtonText(BUTTON_STATES.BRIDGE);
+        setBridgeButtonDisabled(false);
+        addNotification(`Successfully switched to ${fromConfig.name}`, 'success');
+      } catch (error) {
+        console.error('Failed to switch chain:', error);
+        addNotification(`Failed to switch to ${fromConfig.name}. Please switch manually.`, 'error');
+        setBridgeButtonText(BUTTON_STATES.BRIDGE);
+        setBridgeButtonDisabled(false);
+        setNeedsChainSwitch(false);
+      }
+      return;
     }
-  };
+  }, [chainId, connect, fromConfig, switchChain, addNotification, isConnected]);
 
   const swapChains = () => {
     setState({
@@ -612,7 +650,7 @@ function App() {
 
   const unviewedCount = notifications.filter(n => !n.viewed).length;
 
-  
+
 
   return (
     <div>
@@ -624,7 +662,7 @@ function App() {
         <div className="orb"></div>
       </div>
 
-      
+
 
       {/* Mobile Header */}
       <div className="mobile-header">

@@ -7,6 +7,8 @@ import '@rainbow-me/rainbowkit/styles.css'
 import {
   getDefaultConfig,
   RainbowKitProvider,
+  getDefaultWallets,
+  connectorsForWallets,
 } from '@rainbow-me/rainbowkit'
 import { WagmiProvider } from 'wagmi'
 import {
@@ -18,6 +20,14 @@ import {
   QueryClientProvider,
   QueryClient,
 } from "@tanstack/react-query"
+import {
+  injectedWallet,
+  metaMaskWallet,
+  walletConnectWallet,
+  rabbyWallet,
+  coinbaseWallet,
+  trustWallet,
+} from '@rainbow-me/rainbowkit/wallets'
 
 // Define Monad testnet chain
 const monadTestnet = {
@@ -39,10 +49,30 @@ const monadTestnet = {
   testnet: true,
 }
 
+const wallets = [
+  {
+    groupName: 'Recommended',
+    wallets: [
+      injectedWallet,
+      metaMaskWallet,
+      walletConnectWallet,
+      rabbyWallet,
+      coinbaseWallet,
+      trustWallet,
+    ],
+  },
+];
+
+const connectors = connectorsForWallets(wallets, {
+  appName: 'Mon Bridge Dex',
+  projectId: '931ae2f446138b9d543f1fc72f30efb1',
+});
+
 const config = getDefaultConfig({
   appName: 'Mon Bridge Dex',
   projectId: '931ae2f446138b9d543f1fc72f30efb1',
   chains: [monadTestnet, sepolia, baseSepolia],
+  connectors,
   ssr: false,
 })
 
