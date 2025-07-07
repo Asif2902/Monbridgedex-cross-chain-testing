@@ -42,17 +42,15 @@ const monadTestnet = {
 const config = createConfig({
   chains: [monadTestnet, sepolia, baseSepolia],
   connectors: [
-    injected({
-      target: 'metaMask',
-    }),
+    injected(),
     metaMask(),
     walletConnect({ 
       projectId: '931ae2f446138b9d543f1fc72f30efb1',
       metadata: {
         name: 'Mon Bridge Dex',
         description: 'Cross Chain Bridge',
-        url: 'https://monbridgedex.xyz',
-        icons: ['https://monbridgedex.xyz/Tokenlogo.png']
+        url: window.location.origin,
+        icons: [`${window.location.origin}/favicon.ico`]
       }
     })
   ],
