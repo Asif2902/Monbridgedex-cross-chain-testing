@@ -18,6 +18,7 @@ import {
   QueryClientProvider,
   QueryClient,
 } from "@tanstack/react-query"
+import { injected, metaMask, walletConnect } from 'wagmi/connectors'
 
 // Define Monad testnet chain
 const monadTestnet = {
@@ -43,6 +44,11 @@ const config = getDefaultConfig({
   appName: 'Mon Bridge Dex',
   projectId: '931ae2f446138b9d543f1fc72f30efb1',
   chains: [monadTestnet, sepolia, baseSepolia],
+  connectors: [
+    injected(),
+    metaMask(),
+    walletConnect({ projectId: '931ae2f446138b9d543f1fc72f30efb1' })
+  ],
   ssr: false,
 })
 
