@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAccount, useConnect, useDisconnect, useSwitchChain, useBalance, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi';
 import { parseUnits, formatUnits, encodePacked, zeroAddress } from 'viem';
-import { injected, metaMask, walletConnect } from 'wagmi/connectors';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import './App.css';
 
 const CONTRACTS = {
@@ -194,8 +194,6 @@ function App() {
   const [showToChainDropdown, setShowToChainDropdown] = useState(false);
   const [showFromTokenDropdown, setShowFromTokenDropdown] = useState(false);
   const [estimatedGasCost, setEstimatedGasCost] = useState('--');
-  const [showConnectorModal, setShowConnectorModal] = useState(false);
-
   const fromConfig = CONTRACTS[state.fromChain];
   const toConfig = CONTRACTS[state.toChain];
 
@@ -445,33 +443,13 @@ function App() {
       setShowToChainDropdown(false);
       setShowFromTokenDropdown(false);
       setShowNotifications(false);
-      setShowConnectorModal(false);
     };
 
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
-  const handleConnect = () => {
-    setShowConnectorModal(true);
-  };
-
-  const handleConnectorSelect = (connector) => {
-    setConnectButtonText(BUTTON_STATES.CONNECTING);
-    setConnectButtonDisabled(true);
-
-    connect({ connector }, {
-      onSuccess: () => {
-        setConnectButtonText(BUTTON_STATES.CONNECT);
-        setConnectButtonDisabled(false);
-        setShowConnectorModal(false);
-      },
-      onError: () => {
-        setConnectButtonText(BUTTON_STATES.CONNECT);
-        setConnectButtonDisabled(false);
-      }
-    });
-  };
+  
 
   const handleSwitchChain = async () => {
     try {
@@ -634,12 +612,7 @@ function App() {
 
   const unviewedCount = notifications.filter(n => !n.viewed).length;
 
-  const getConnectorName = (connector) => {
-    if (connector.id === 'injected') return 'Injected';
-    if (connector.id === 'metaMask') return 'MetaMask';
-    if (connector.id === 'walletConnect') return 'WalletConnect';
-    return connector.name;
-  };
+  
 
   return (
     <div>
@@ -651,51 +624,72 @@ function App() {
         <div className="orb"></div>
       </div>
 
-      {/* Connector Modal */}
-      {showConnectorModal && (
-        <div className="modal-overlay" onClick={() => setShowConnectorModal(false)}>
-          <div className="connector-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>Connect Wallet</h3>
-              <button className="modal-close" onClick={() => setShowConnectorModal(false)}>×</button>
-            </div>
-            <div className="connector-list">
-              {connectors.map((connector) => (
-                <button
-                  key={connector.id}
-                  className="connector-button"
-                  onClick={() => handleConnectorSelect(connector)}
-                  disabled={connectButtonDisabled}
-                >
-                  <span>{getConnectorName(connector)}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      
 
       {/* Mobile Header */}
       <div className="mobile-header">
-        <button 
-          className={`mobile-header-wallet-button ${isConnected ? 'connected' : ''}`}
-          onClick={handleConnect}
-          disabled={connectButtonDisabled}
-        >
-          {isConnected ? (
-            <div className="wallet-info">
-              <div className="wallet-status">●</div>
-              <span>{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected'}</span>
-            </div>
-          ) : (
-            <div className="wallet-info">
-              <svg viewBox="0 0 24 24">
-                <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-              </svg>
-              {connectButtonText}
-            </div>
-          )}
-        </button>
+        <ConnectButton.Custom>
+          {({
+            account,
+            chain,
+            openAccountModal,
+            openChainModal,
+            openConnectModal,
+            authenticationStatus,
+            mounted,
+          }) => {
+            const ready = mounted && authenticationStatus !== 'loading';
+            const connected =
+              ready &&
+              account &&
+              chain &&
+              (!authenticationStatus ||
+                authenticationStatus === 'authenticated');
+            return (
+              <div
+                {...(!ready && {
+                  'aria-hidden': true,
+                  'style': {
+                    opacity: 0,
+                    pointerEvents: 'none',
+                    userSelect: 'none',
+                  },
+                })}
+              >
+                {(() => {
+                  if (!connected) {
+                    return (
+                      <button
+                        onClick={openConnectModal}
+                        type="button"
+                        className="mobile-header-wallet-button"
+                      >
+                        <div className="wallet-info">
+                          <svg viewBox="0 0 24 24">
+                            <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                          </svg>
+                          Connect Wallet
+                        </div>
+                      </button>
+                    );
+                  }
+                  return (
+                    <button
+                      onClick={openAccountModal}
+                      type="button"
+                      className="mobile-header-wallet-button connected"
+                    >
+                      <div className="wallet-info">
+                        <div className="wallet-status">●</div>
+                        <span>{account.displayName}</span>
+                      </div>
+                    </button>
+                  );
+                })()}
+              </div>
+            );
+          }}
+        </ConnectButton.Custom>
       </div>
 
       {/* Desktop Header */}
@@ -721,25 +715,68 @@ function App() {
               Bridge
             </div>
           </div>
-          <button 
-            className={`header-wallet-button ${isConnected ? 'connected' : ''}`}
-            onClick={handleConnect}
-            disabled={connectButtonDisabled}
-          >
-            {isConnected ? (
-              <div className="wallet-info">
-                <div className="wallet-status">●</div>
-                <span>{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected'}</span>
-              </div>
-            ) : (
-              <div className="wallet-info">
-                <svg viewBox="0 0 24 24">
-                  <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                </svg>
-                {connectButtonText}
-              </div>
-            )}
-          </button>
+          <ConnectButton.Custom>
+            {({
+              account,
+              chain,
+              openAccountModal,
+              openChainModal,
+              openConnectModal,
+              authenticationStatus,
+              mounted,
+            }) => {
+              const ready = mounted && authenticationStatus !== 'loading';
+              const connected =
+                ready &&
+                account &&
+                chain &&
+                (!authenticationStatus ||
+                  authenticationStatus === 'authenticated');
+              return (
+                <div
+                  {...(!ready && {
+                    'aria-hidden': true,
+                    'style': {
+                      opacity: 0,
+                      pointerEvents: 'none',
+                      userSelect: 'none',
+                    },
+                  })}
+                >
+                  {(() => {
+                    if (!connected) {
+                      return (
+                        <button
+                          onClick={openConnectModal}
+                          type="button"
+                          className="header-wallet-button"
+                        >
+                          <div className="wallet-info">
+                            <svg viewBox="0 0 24 24">
+                              <path d="M21 18v1c0 1.1-.9 2-2 2H5c-1.11 0-2-.9-2-2V5c0-1.1.89-2 2-2h14c1.1 0 2 .9 2 2v1h-9c-1.11 0-2 .9-2 2v8c0 1.1.89 2 2 2h9zm-9-2h10V8H12v8zm4-2.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                            </svg>
+                            Connect Wallet
+                          </div>
+                        </button>
+                      );
+                    }
+                    return (
+                      <button
+                        onClick={openAccountModal}
+                        type="button"
+                        className="header-wallet-button connected"
+                      >
+                        <div className="wallet-info">
+                          <div className="wallet-status">●</div>
+                          <span>{account.displayName}</span>
+                        </div>
+                      </button>
+                    );
+                  })()}
+                </div>
+              );
+            }}
+          </ConnectButton.Custom>
         </div>
       </div>
 
@@ -1085,13 +1122,27 @@ return 'Blocked';
               </div>
             </div>
 
-            <button 
-              className="action-button bridge" 
-              onClick={handleMainAction}
-              disabled={bridgeButtonDisabled || connectButtonDisabled}
-            >
-              {isConnected ? bridgeButtonText : connectButtonText}
-            </button>
+            {!isConnected ? (
+              <ConnectButton.Custom>
+                {({ openConnectModal }) => (
+                  <button 
+                    className="action-button connect" 
+                    onClick={openConnectModal}
+                    type="button"
+                  >
+                    Connect Wallet
+                  </button>
+                )}
+              </ConnectButton.Custom>
+            ) : (
+              <button 
+                className="action-button bridge" 
+                onClick={handleMainAction}
+                disabled={bridgeButtonDisabled}
+              >
+                {bridgeButtonText}
+              </button>
+            )}
 
             <div className="bridge-footer">
               <div className="footer-text">Cross Chain Bridge</div>
