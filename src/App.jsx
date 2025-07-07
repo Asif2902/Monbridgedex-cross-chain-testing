@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ethers } from 'ethers';
+import { useAccount, useConnect, useDisconnect, useSwitchChain, useBalance, useWriteContract, useReadContract, useWaitForTransactionReceipt } from 'wagmi';
+import { parseUnits, formatUnits, encodePacked, zeroAddress } from 'viem';
+import { injected, metaMask, walletConnect } from 'wagmi/connectors';
 import './App.css';
 
 const CONTRACTS = {
@@ -42,15 +44,114 @@ const CONTRACTS = {
 };
 
 const OFT_ADAPTER_ABI = [
-  'function send((uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd) sendParam, (uint256 nativeFee, uint256 lzTokenFee) fee, address refundTo) payable returns ((bytes32 guid, uint256 nativeFee, uint256 lzTokenFee))',
-  'function quoteSend((uint32 dstEid, bytes32 to, uint256 amountLD, uint256 minAmountLD, bytes extraOptions, bytes composeMsg, bytes oftCmd) sendParam, bool payInLzToken) view returns ((uint256 nativeFee, uint256 lzTokenFee))'
+  {
+    "inputs": [
+      {
+        "components": [
+          {"name": "dstEid", "type": "uint32"},
+          {"name": "to", "type": "bytes32"},
+          {"name": "amountLD", "type": "uint256"},
+          {"name": "minAmountLD", "type": "uint256"},
+          {"name": "extraOptions", "type": "bytes"},
+          {"name": "composeMsg", "type": "bytes"},
+          {"name": "oftCmd", "type": "bytes"}
+        ],
+        "name": "sendParam",
+        "type": "tuple"
+      },
+      {
+        "components": [
+          {"name": "nativeFee", "type": "uint256"},
+          {"name": "lzTokenFee", "type": "uint256"}
+        ],
+        "name": "fee",
+        "type": "tuple"
+      },
+      {"name": "refundTo", "type": "address"}
+    ],
+    "name": "send",
+    "outputs": [
+      {
+        "components": [
+          {"name": "guid", "type": "bytes32"},
+          {"name": "nativeFee", "type": "uint256"},
+          {"name": "lzTokenFee", "type": "uint256"}
+        ],
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "components": [
+          {"name": "dstEid", "type": "uint32"},
+          {"name": "to", "type": "bytes32"},
+          {"name": "amountLD", "type": "uint256"},
+          {"name": "minAmountLD", "type": "uint256"},
+          {"name": "extraOptions", "type": "bytes"},
+          {"name": "composeMsg", "type": "bytes"},
+          {"name": "oftCmd", "type": "bytes"}
+        ],
+        "name": "sendParam",
+        "type": "tuple"
+      },
+      {"name": "payInLzToken", "type": "bool"}
+    ],
+    "name": "quoteSend",
+    "outputs": [
+      {
+        "components": [
+          {"name": "nativeFee", "type": "uint256"},
+          {"name": "lzTokenFee", "type": "uint256"}
+        ],
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  }
 ];
 
 const ERC20_ABI = [
-  'function balanceOf(address) view returns (uint256)',
-  'function decimals() view returns (uint8)',
-  'function approve(address spender, uint256 amount) returns (bool)',
-  'function allowance(address owner, address spender) view returns (uint256)'
+  {
+    "inputs": [{"name": "account", "type": "address"}],
+    "name": "balanceOf",
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "decimals",
+    "outputs": [{"name": "", "type": "uint8"}],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"name": "spender", "type": "address"},
+      {"name": "amount", "type": "uint256"}
+    ],
+    "name": "approve",
+    "outputs": [{"name": "", "type": "bool"}],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {"name": "owner", "type": "address"},
+      {"name": "spender", "type": "address"}
+    ],
+    "name": "allowance",
+    "outputs": [{"name": "", "type": "uint256"}],
+    "stateMutability": "view",
+    "type": "function"
+  }
 ];
 
 const BUTTON_STATES = {
@@ -71,31 +172,99 @@ const STORAGE_KEYS = {
 };
 
 function App() {
-  const [provider, setProvider] = useState(null);
-  const [signer, setSigner] = useState(null);
-  const [currentAccount, setCurrentAccount] = useState(null);
+  const { address, isConnected, chainId } = useAccount();
+  const { connect, connectors } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { switchChain } = useSwitchChain();
+  const { writeContract } = useWriteContract();
+
   const [state, setState] = useState({
     fromChain: 'monad',
     toChain: 'sepolia'
   });
   const [notifications, setNotifications] = useState([]);
   const [amount, setAmount] = useState('');
-  const [balance, setBalance] = useState('--');
-  const [destinationBalance, setDestinationBalance] = useState('--');
   const [bridgeButtonText, setBridgeButtonText] = useState(BUTTON_STATES.BRIDGE);
   const [bridgeButtonDisabled, setBridgeButtonDisabled] = useState(false);
   const [connectButtonText, setConnectButtonText] = useState(BUTTON_STATES.CONNECT);
   const [connectButtonDisabled, setConnectButtonDisabled] = useState(false);
-  const [isConnected, setIsConnected] = useState(false);
   const [needsChainSwitch, setNeedsChainSwitch] = useState(false);
-  const [currentChainId, setCurrentChainId] = useState(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showFromChainDropdown, setShowFromChainDropdown] = useState(false);
   const [showToChainDropdown, setShowToChainDropdown] = useState(false);
   const [showFromTokenDropdown, setShowFromTokenDropdown] = useState(false);
   const [estimatedGasCost, setEstimatedGasCost] = useState('--');
+  const [showConnectorModal, setShowConnectorModal] = useState(false);
 
-  // Storage functions first
+  const fromConfig = CONTRACTS[state.fromChain];
+  const toConfig = CONTRACTS[state.toChain];
+
+  // Get token balance for from chain
+  const { data: fromTokenBalance } = useReadContract({
+    address: fromConfig.token,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [address || zeroAddress],
+    chainId: fromConfig.chainId,
+  });
+
+  const { data: fromTokenDecimals } = useReadContract({
+    address: fromConfig.token,
+    abi: ERC20_ABI,
+    functionName: 'decimals',
+    chainId: fromConfig.chainId,
+  });
+
+  // Get token balance for to chain
+  const { data: toTokenBalance } = useReadContract({
+    address: toConfig.token,
+    abi: ERC20_ABI,
+    functionName: 'balanceOf',
+    args: [address || zeroAddress],
+    chainId: toConfig.chainId,
+  });
+
+  const { data: toTokenDecimals } = useReadContract({
+    address: toConfig.token,
+    abi: ERC20_ABI,
+    functionName: 'decimals',
+    chainId: toConfig.chainId,
+  });
+
+  // Get allowance
+  const { data: allowance } = useReadContract({
+    address: fromConfig.token,
+    abi: ERC20_ABI,
+    functionName: 'allowance',
+    args: [address || zeroAddress, fromConfig.adapter],
+    chainId: fromConfig.chainId,
+  });
+
+  // Get quote
+  const amountLD = amount && fromTokenDecimals ? parseUnits(amount, fromTokenDecimals) : 0n;
+  const gasLimit = 900000n;
+  const extraOptions = gasLimit > 0 ? encodePacked(['uint16', 'uint256'], [1, gasLimit]) : '0x';
+
+  const sendParam = {
+    dstEid: toConfig.endpointId,
+    to: address ? `0x${address.slice(2).padStart(64, '0')}` : '0x0000000000000000000000000000000000000000000000000000000000000000',
+    amountLD,
+    minAmountLD: amountLD,
+    extraOptions,
+    composeMsg: '0x',
+    oftCmd: '0x'
+  };
+
+  const { data: quote } = useReadContract({
+    address: fromConfig.adapter,
+    abi: OFT_ADAPTER_ABI,
+    functionName: 'quoteSend',
+    args: [sendParam, false],
+    chainId: fromConfig.chainId,
+    query: { enabled: !!amount && !!address && parseFloat(amount) > 0 }
+  });
+
+  // Storage functions
   const saveNotificationsToStorage = useCallback((notifs) => {
     try {
       const serializedNotifications = JSON.stringify(notifs.map(n => ({
@@ -105,27 +274,67 @@ function App() {
       localStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, serializedNotifications);
       const unviewedCount = notifs.filter(n => !n.viewed).length;
       localStorage.setItem(STORAGE_KEYS.NOTIFICATION_COUNT, unviewedCount.toString());
-      console.log('Notifications saved to storage:', notifs.length);
     } catch (error) {
       console.error('Failed to save notifications to localStorage:', error);
     }
   }, []);
 
+  const loadNotificationsFromStorage = useCallback(() => {
+    try {
+      const savedNotifications = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+      if (savedNotifications) {
+        const parsed = JSON.parse(savedNotifications);
+        const processedNotifications = parsed.map(notification => ({
+          ...notification,
+          timestamp: new Date(notification.timestamp)
+        }));
+        setNotifications(processedNotifications);
+        return processedNotifications;
+      }
+    } catch (error) {
+      console.error('Failed to load notifications from localStorage:', error);
+    }
+    return [];
+  }, []);
+
   // Utility functions
   const updateNotificationStatus = useCallback((txHash, newStatus) => {
-    console.log('Updating notification status:', txHash, newStatus);
-
     setNotifications(prevNotifications => {
       const updatedNotifications = prevNotifications.map(n => 
         n.txHash === txHash ? { ...n, status: newStatus } : n
       );
-      // Save to storage after state update
       setTimeout(() => saveNotificationsToStorage(updatedNotifications), 0);
       return updatedNotifications;
     });
-  }, []);
+  }, [saveNotificationsToStorage]);
 
-  // Transaction status checking
+  const addNotification = (fromChain, toChain, status, txHash, amountValue, errorMessage = null) => {
+    const fromConfig = CONTRACTS[fromChain];
+    const toConfig = CONTRACTS[toChain];
+
+    const notification = {
+      id: Date.now() + Math.random(),
+      fromChain,
+      toChain,
+      fromLogo: fromConfig.logo,
+      toLogo: toConfig.logo,
+      fromName: fromConfig.name,
+      toName: toConfig.name,
+      status,
+      txHash,
+      amount: amountValue,
+      timestamp: new Date(),
+      viewed: false,
+      errorMessage
+    };
+
+    setNotifications(prevNotifications => {
+      const newNotifications = [notification, ...prevNotifications];
+      setTimeout(() => saveNotificationsToStorage(newNotifications), 0);
+      return newNotifications;
+    });
+  };
+
   const checkTransactionStatus = useCallback(async (txHash) => {
     try {
       const response = await fetch(`https://scan-testnet.layerzero-api.com/v1/messages/tx/${txHash}`);
@@ -134,22 +343,16 @@ function App() {
       }
       const data = await response.json();
 
-      // Check if the response has data array with transaction info
       if (data && data.data && data.data.length > 0) {
         const transaction = data.data[0];
-
-        // Check for status.name field (new API structure)
         if (transaction.status && transaction.status.name) {
           return transaction.status.name.toUpperCase();
         }
-
-        // Fallback: check destination status for more specific status
         if (transaction.destination && transaction.destination.status) {
           return transaction.destination.status.toUpperCase();
         }
       }
 
-      // Legacy fallback for old API structure
       if (data && data.status) {
         return data.status.toUpperCase();
       }
@@ -181,194 +384,21 @@ function App() {
       for (const notification of activeNotifications) {
         try {
           const status = await checkTransactionStatus(notification.txHash);
-
           if (status !== notification.status) {
-            console.log(`Status update for ${notification.txHash}: ${notification.status} -> ${status}`);
             updateNotificationStatus(notification.txHash, status);
-
-            // Refresh balances when cross-chain transaction is delivered
-            if (status === 'DELIVERED') {
-              setTimeout(() => {
-                updateBalance();
-              }, 3000);
-            }
           }
         } catch (error) {
           console.error(`Error checking status for ${notification.txHash}:`, error);
         }
       }
-    }, 2000); // Check every 2 seconds
+    }, 2000);
 
     return interval;
   }, [notifications, checkTransactionStatus, updateNotificationStatus]);
 
-  // Utility functions
-  const getTimeAgo = (timestamp) => {
-    const now = new Date();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    if (minutes > 0) return `${minutes}m ago`;
-    return 'Just now';
-  };
-
-  const loadNotificationsFromStorage = useCallback(() => {
-    try {
-      const savedNotifications = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
-      if (savedNotifications) {
-        const parsed = JSON.parse(savedNotifications);
-        const processedNotifications = parsed.map(notification => ({
-          ...notification,
-          timestamp: new Date(notification.timestamp)
-        }));
-        console.log('Notifications loaded from storage:', processedNotifications.length);
-        setNotifications(processedNotifications);
-        return processedNotifications;
-      }
-    } catch (error) {
-      console.error('Failed to load notifications from localStorage:', error);
-    }
-    return [];
-  }, []);
-
-  const saveWalletConnection = (address) => {
-    try {
-      localStorage.setItem(STORAGE_KEYS.WALLET_CONNECTED, 'true');
-      localStorage.setItem(STORAGE_KEYS.WALLET_ADDRESS, address);
-    } catch (error) {
-      console.warn('Failed to save wallet connection:', error);
-    }
-  };
-
-  const loadWalletConnection = () => {
-    try {
-      const isWalletConnected = localStorage.getItem(STORAGE_KEYS.WALLET_CONNECTED) === 'true';
-      const savedAddress = localStorage.getItem(STORAGE_KEYS.WALLET_ADDRESS);
-      return { isConnected: isWalletConnected, savedAddress };
-    } catch (error) {
-      console.warn('Failed to load wallet connection:', error);
-      return { isConnected: false, savedAddress: null };
-    }
-  };
-
-  const clearWalletConnection = () => {
-    try {
-      localStorage.removeItem(STORAGE_KEYS.WALLET_CONNECTED);
-      localStorage.removeItem(STORAGE_KEYS.WALLET_ADDRESS);
-    } catch (error) {
-      console.warn('Failed to clear wallet connection:', error);
-    }
-  };
-
-  const getGasCostEstimate = useCallback(async () => {
-    if (!signer || !amount || parseFloat(amount) <= 0) {
-      setEstimatedGasCost('--');
-      return;
-    }
-
-    try {
-      const fromConfig = CONTRACTS[state.fromChain];
-      const toConfig = CONTRACTS[state.toChain];
-
-      // Verify we're on the correct chain
-      const currentNetwork = await provider.getNetwork();
-      if (currentNetwork.chainId !== BigInt(fromConfig.chainId)) {
-        setEstimatedGasCost('Switch chain first');
-        return;
-      }
-
-      const adapter = new ethers.Contract(fromConfig.adapter, OFT_ADAPTER_ABI, signer);
-      const token = new ethers.Contract(fromConfig.token, ERC20_ABI, signer);
-
-      const decimals = await token.decimals();
-      const amountLD = ethers.parseUnits(amount, decimals);
-
-      const gasLimit = 900000n;
-      const extraOptions = ethers.solidityPacked(['uint16', 'uint256'], [1, gasLimit]);
-
-      const sendParam = {
-        dstEid: toConfig.endpointId,
-        to: ethers.zeroPadValue(currentAccount, 32),
-        amountLD, 
-        minAmountLD: amountLD,
-        extraOptions: extraOptions,
-        composeMsg: '0x', 
-        oftCmd: '0x'
-      };
-
-      const [nativeFee] = await adapter.quoteSend(sendParam, false);
-      const formattedFee = ethers.formatEther(nativeFee);
-      const nativeSymbol = fromConfig.name === 'Monad' ? 'MON' : 'ETH';
-      
-      setEstimatedGasCost(`~${parseFloat(formattedFee).toFixed(6)} ${nativeSymbol}`);
-    } catch (error) {
-      console.error('Error getting gas estimate:', error);
-      setEstimatedGasCost('Error getting quote');
-    }
-  }, [signer, amount, state.fromChain, state.toChain, currentAccount, provider]);
-
-  const addNotification = (fromChain, toChain, status, txHash, amountValue, errorMessage = null) => {
-    const fromConfig = CONTRACTS[fromChain];
-    const toConfig = CONTRACTS[toChain];
-
-    const notification = {
-      id: Date.now() + Math.random(), // Ensure unique ID
-      fromChain,
-      toChain,
-      fromLogo: fromConfig.logo,
-      toLogo: toConfig.logo,
-      fromName: fromConfig.name,
-      toName: toConfig.name,
-      status,
-      txHash,
-      amount: amountValue,
-      timestamp: new Date(),
-      viewed: false,
-      errorMessage
-    };
-
-    console.log('Adding notification:', notification);
-
-    setNotifications(prevNotifications => {
-      const newNotifications = [notification, ...prevNotifications];
-      // Save to storage after state update
-      setTimeout(() => saveNotificationsToStorage(newNotifications), 0);
-      return newNotifications;
-    });
-  };
-
-  const updateNotificationWithError = useCallback((txHash, errorMessage) => {
-    console.log('Updating notification with error:', txHash, errorMessage);
-
-    setNotifications(prevNotifications => {
-      const updatedNotifications = prevNotifications.map(n => 
-        n.txHash === txHash ? { ...n, status: 'FAILED', errorMessage } : n
-      );
-      // Save to storage after state update
-      setTimeout(() => saveNotificationsToStorage(updatedNotifications), 0);
-      return updatedNotifications;
-    });
-  }, [saveNotificationsToStorage]);
-
-
-
-  const checkCurrentChain = useCallback(async () => {
-    if (!provider) {
-      setCurrentChainId(null);
-      setNeedsChainSwitch(false);
-      return;
-    }
-
-    try {
-      const network = await provider.getNetwork();
-      const chainId = Number(network.chainId);
-      setCurrentChainId(chainId);
-
-      const fromConfig = CONTRACTS[state.fromChain];
+  // Check if chain switch is needed
+  useEffect(() => {
+    if (isConnected && chainId) {
       const needsSwitch = chainId !== fromConfig.chainId;
       setNeedsChainSwitch(needsSwitch);
 
@@ -377,514 +407,26 @@ function App() {
       } else {
         setBridgeButtonText(BUTTON_STATES.BRIDGE);
       }
-    } catch (error) {
-      console.error('Error checking current chain:', error);
-      setNeedsChainSwitch(false);
     }
-  }, [provider, state.fromChain]);
+  }, [isConnected, chainId, fromConfig.chainId]);
 
-  const updateBalance = useCallback(async () => {
-    if (!currentAccount) {
-      setBalance('--');
-      setDestinationBalance('--');
-      return;
-    }
-
-    try {
-      // Update source chain balance
-      const fromConfig = CONTRACTS[state.fromChain];
-      const fromChainProvider = new ethers.JsonRpcProvider(fromConfig.rpcUrl);
-      const fromToken = new ethers.Contract(fromConfig.token, ERC20_ABI, fromChainProvider);
-      const [fromTokenBalance, fromDecimals] = await Promise.all([
-        fromToken.balanceOf(currentAccount), 
-        fromToken.decimals()
-      ]);
-      const formattedFromBalance = ethers.formatUnits(fromTokenBalance, fromDecimals);
-      setBalance(`${parseFloat(formattedFromBalance).toFixed(4)} ${fromConfig.tokenSymbol}`);
-
-      // Update destination chain balance
-      const toConfig = CONTRACTS[state.toChain];
-      const toChainProvider = new ethers.JsonRpcProvider(toConfig.rpcUrl);
-      const toToken = new ethers.Contract(toConfig.token, ERC20_ABI, toChainProvider);
-      const [toTokenBalance, toDecimals] = await Promise.all([
-        toToken.balanceOf(currentAccount), 
-        toToken.decimals()
-      ]);
-      const formattedToBalance = ethers.formatUnits(toTokenBalance, toDecimals);
-      setDestinationBalance(`${parseFloat(formattedToBalance).toFixed(4)} ${toConfig.tokenSymbol}`);
-    } catch (error) {
-      console.error('Error updating balances:', error);
-      setBalance('Error loading');
-      setDestinationBalance('Error loading');
-    }
-  }, [currentAccount, state.fromChain, state.toChain]);
-
-  const switchToChain = async (chainKey) => {
-    if (!provider) return false;
-
-    const targetChainId = CONTRACTS[chainKey].chainId;
-    const network = await provider.getNetwork();
-
-    if (network.chainId === BigInt(targetChainId)) {
-      return true; // Already on correct chain
-    }
-
-    try {
-      setBridgeButtonText(BUTTON_STATES.SWITCHING_CHAIN);
-      setBridgeButtonDisabled(true);
-
-      await window.ethereum.request({ 
-        method: 'wallet_switchEthereumChain', 
-        params: [{ chainId: CONTRACTS[chainKey].chainIdHex }] 
-      });
-
-      // Wait for the network to fully switch
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Create new provider and signer instances
-      const newProvider = new ethers.BrowserProvider(window.ethereum);
-      const newSigner = await newProvider.getSigner();
-
-      // Verify the chain switch was successful
-      const newNetwork = await newProvider.getNetwork();
-      if (newNetwork.chainId !== BigInt(targetChainId)) {
-        throw new Error('Chain switch verification failed');
-      }
-
-      setProvider(newProvider);
-      setSigner(newSigner);
-      setCurrentChainId(Number(newNetwork.chainId));
-      setNeedsChainSwitch(false);
-      setBridgeButtonText(BUTTON_STATES.BRIDGE);
-
-      console.log(`Successfully switched to ${CONTRACTS[chainKey].name} (Chain ID: ${newNetwork.chainId})`);
-
-      // Update balance after successful chain switch
-      setTimeout(() => {
-        updateBalance();
-      }, 500);
-
-      return true;
-
-    } catch (error) {
-      if (error.code === 4902) {
-        try {
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: CONTRACTS[chainKey].chainIdHex, 
-              chainName: CONTRACTS[chainKey].name, 
-              rpcUrls: [CONTRACTS[chainKey].rpcUrl],
-              nativeCurrency: { 
-                name: chainKey === 'monad' ? 'MON' : 'ETH', 
-                symbol: chainKey === 'monad' ? 'MON' : 'ETH', 
-                decimals: 18 
-              }
-            }]
-          });
-
-          // Wait for the network to be added and switch
-          await new Promise(resolve => setTimeout(resolve, 3000));
-
-          const newProvider = new ethers.BrowserProvider(window.ethereum);
-          const newSigner = await newProvider.getSigner();
-
-          // Verify the chain addition and switch was successful
-          const newNetwork = await newProvider.getNetwork();
-          if (newNetwork.chainId !== BigInt(targetChainId)) {
-            throw new Error('Chain addition verification failed');
-          }
-
-          setProvider(newProvider);
-          setSigner(newSigner);
-          setCurrentChainId(Number(newNetwork.chainId));
-          setNeedsChainSwitch(false);
-          setBridgeButtonText(BUTTON_STATES.BRIDGE);
-
-          console.log(`Successfully added and switched to ${CONTRACTS[chainKey].name}`);
-
-          // Update balance after successful chain addition
-          setTimeout(() => {
-            updateBalance();
-          }, 500);
-
-          return true;
-
-        } catch (addError) {
-          console.error('Failed to add chain:', addError);
-          const errorMsg = `Failed to add ${CONTRACTS[chainKey].name} chain. Please add it manually.`;
-          setBridgeButtonText('Switch Chain');
-          setBridgeButtonDisabled(false);
-          throw new Error(errorMsg);
-        }
-      } else if (error.code === 4001) {
-        const errorMsg = `User rejected switching to ${CONTRACTS[chainKey].name} chain`;
-        setBridgeButtonText('Switch Chain');
-        setBridgeButtonDisabled(false);
-        return false;
-      } else {
-        console.error('Failed to switch chain:', error);
-        const errorMsg = `Failed to switch to ${CONTRACTS[chainKey].name} chain: ${error.message}`;
-        setBridgeButtonText('Switch Chain');
-        setBridgeButtonDisabled(false);
-        throw new Error(errorMsg);
-      }
-    } finally {
-      setBridgeButtonDisabled(false);
-    }
-  };
-
-  const connectWallet = async () => {
-    if (!window.ethereum) {
-      console.error('MetaMask is not installed.');
-      return;
-    }
-
-    try {
-      setConnectButtonText(BUTTON_STATES.CONNECTING);
-      setConnectButtonDisabled(true);
-
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const account = ethers.getAddress(accounts[0]);
-      const newProvider = new ethers.BrowserProvider(window.ethereum);
-      const newSigner = await newProvider.getSigner();
-
-      setCurrentAccount(account);
-      setProvider(newProvider);
-      setSigner(newSigner);
-      setIsConnected(true);
-
-      // Reset button states after successful connection
-      setConnectButtonText(BUTTON_STATES.CONNECT);
-      setConnectButtonDisabled(false);
-      setBridgeButtonText(BUTTON_STATES.BRIDGE);
-      setBridgeButtonDisabled(false);
-
-      saveWalletConnection(account);
-      console.log(`Wallet connected: ${account}`);
-
-      // Setup event listeners
-      window.ethereum.on('accountsChanged', async (accounts) => {
-        if (accounts.length === 0) {
-          setCurrentAccount(null);
-          setSigner(null);
-          setIsConnected(false);
-          clearWalletConnection();
-          setConnectButtonText(BUTTON_STATES.CONNECT);
-          setConnectButtonDisabled(false);
-          console.log('Wallet disconnected.');
-        } else {
-          const newAccount = ethers.getAddress(accounts[0]);
-          if (newAccount !== currentAccount) {
-            setCurrentAccount(newAccount);
-            saveWalletConnection(newAccount);
-            console.log(`Account changed to: ${newAccount}`);
-          }
-        }
-      });
-
-      window.ethereum.on('chainChanged', async () => {
-        if (provider) {
-          const newProvider = new ethers.BrowserProvider(window.ethereum);
-          const newSigner = await newProvider.getSigner();
-          setProvider(newProvider);
-          setSigner(newSigner);
-
-          // Check if we need to switch chain after network change
-          setTimeout(() => {
-            checkCurrentChain();
-            updateBalance();
-          }, 1000);
-        }
-      });
-
-    } catch (error) {
-      console.error(`Failed to connect wallet: ${error.message}`);
-      setConnectButtonText(BUTTON_STATES.CONNECT);
-      setConnectButtonDisabled(false);
-    }
-  };
-
-  const bridgeTokens = async () => {
-    if (!signer) {
-      console.error('Please connect your wallet first');
-      return;
-    }
-
-    const amountStr = amount;
-    if (!amountStr || parseFloat(amountStr) <= 0) {
-      console.error('Please enter a valid amount.');
-      return;
-    }
-
-    let tempTxHash = null;
-
-    try {
-      const fromConfig = CONTRACTS[state.fromChain];
-      const toConfig = CONTRACTS[state.toChain];
-
-      console.log(`Starting bridge: ${amountStr} tokens from ${fromConfig.name} to ${toConfig.name}.`);
-
-      // Verify we're on the correct chain before proceeding
-      const currentNetwork = await provider.getNetwork();
-      if (currentNetwork.chainId !== BigInt(fromConfig.chainId)) {
-        throw new Error(`Please switch to ${fromConfig.name} network first`);
-      }
-
-      const adapter = new ethers.Contract(fromConfig.adapter, OFT_ADAPTER_ABI, signer);
-      const token = new ethers.Contract(fromConfig.token, ERC20_ABI, signer);
-
-      const decimals = await token.decimals();
-      const amountLD = ethers.parseUnits(amountStr, decimals);
-
-      const tokenBalance = await token.balanceOf(currentAccount);
-      if (tokenBalance < amountLD) {
-        const formattedBalance = ethers.formatUnits(tokenBalance, decimals);
-        throw new Error(`Insufficient balance: You have ${parseFloat(formattedBalance).toFixed(4)} MBD but need ${amountStr} MBD`);
-      }
-
-      console.log('Getting bridge quote...');
-      setBridgeButtonText('Getting Quote...');
-      setBridgeButtonDisabled(true);
-
-      const gasLimit = 900000n;
-      const extraOptions = ethers.solidityPacked(['uint16', 'uint256'], [1, gasLimit]);
-
-      const sendParam = {
-        dstEid: toConfig.endpointId,
-        to: ethers.zeroPadValue(currentAccount, 32),
-        amountLD, 
-        minAmountLD: amountLD,
-        extraOptions: extraOptions,
-        composeMsg: '0x', 
-        oftCmd: '0x'
-      };
-
-      const [nativeFee] = await adapter.quoteSend(sendParam, false);
-      console.log(`Quote: ${ethers.formatEther(nativeFee)} ${fromConfig.name === 'Monad' ? 'MON' : 'ETH'}`);
-
-      const nativeBalance = await provider.getBalance(currentAccount);
-      if (nativeBalance < nativeFee) {
-        const nativeSymbol = fromConfig.name === 'Monad' ? 'MON' : 'ETH';
-        const requiredAmount = ethers.formatEther(nativeFee);
-        const currentAmount = ethers.formatEther(nativeBalance);
-        throw new Error(`Insufficient gas: You need ${parseFloat(requiredAmount).toFixed(6)} ${nativeSymbol} but only have ${parseFloat(currentAmount).toFixed(6)} ${nativeSymbol}`);
-      }
-
-      setBridgeButtonText(BUTTON_STATES.CHECKING_APPROVAL);
-      console.log('Checking token approval...');
-
-      const allowance = await token.allowance(currentAccount, fromConfig.adapter);
-      if (allowance < amountLD) {
-        setBridgeButtonText(BUTTON_STATES.APPROVING);
-        console.log('Approving tokens...');
-
-        const approveTx = await token.approve(fromConfig.adapter, amountLD);
-        await approveTx.wait();
-        console.log('Token approval confirmed');
-      }
-
-      setBridgeButtonText(BUTTON_STATES.BRIDGING);
-      console.log('Sending bridge transaction...');
-
-      const tx = await adapter.send(
-        sendParam, 
-        { nativeFee, lzTokenFee: 0n }, 
-        currentAccount, 
-        { value: nativeFee }
-      );
-      console.log(`Transaction sent: ${tx.hash}`);
-      tempTxHash = tx.hash;
-
-      setBridgeButtonText('Confirming...');
-
-      addNotification(state.fromChain, state.toChain, 'CONFIRMING', tx.hash, amountStr);
-
-      const receipt = await tx.wait();
-      console.log(`Transaction confirmed! Gas used: ${receipt.gasUsed}`);
-
-      const lzScanUrl = `https://testnet.layerzeroscan.com/tx/${receipt.hash}`;
-      console.log(`View on LayerZero Scan: ${lzScanUrl}`);
-
-      updateNotificationStatus(receipt.hash, 'INFLIGHT');
-
-      // Refresh balances immediately after source chain confirmation
-      setTimeout(() => {
-        updateBalance();
-      }, 2000);
-
-      setBridgeButtonText('Bridge Successful!');
-      setTimeout(() => {
-        setBridgeButtonText(BUTTON_STATES.BRIDGE);
-        setBridgeButtonDisabled(false);
-      }, 3000);
-
-    } catch (error) {
-      let errorMessage = error.message || 'Unknown error';
-      let userFriendlyError = errorMessage;
-
-      // Handle specific error codes
-      if (error.data) {
-        const errorMap = {
-          '0x41705130': 'Invalid option format - Transaction parameters not supported',
-          '0xc0927c56': `Destination chain not configured - Cannot bridge to ${CONTRACTS[state.toChain].name}`,
-          '0x6592671c': 'Insufficient fee provided for cross-chain transaction'
-        };
-
-        const selector = error.data.slice(0, 10);
-        userFriendlyError = errorMap[selector] || `Smart contract error: ${selector}`;
-      }
-
-      // Handle common wallet errors
-      if (error.code === 4001) {
-        userFriendlyError = 'Transaction rejected by user';
-      } else if (error.code === -32603) {
-        userFriendlyError = 'Internal JSON-RPC error - Please try again';
-      } else if (error.code === 4902) {
-        userFriendlyError = `Please add ${CONTRACTS[state.fromChain].name} network to your wallet`;
-      } else if (error.message?.includes('user rejected')) {
-        userFriendlyError = 'Transaction rejected by user';
-      } else if (error.message?.includes('insufficient funds')) {
-        userFriendlyError = 'Insufficient funds for gas fees';
-      } else if (error.message?.includes('network changed')) {
-        userFriendlyError = `Please switch to ${CONTRACTS[state.fromChain].name} network`;
-      }
-
-      console.error(`Bridge failed: ${errorMessage}`);
-
-      // Update notification with error if transaction was created
-      if (tempTxHash) {
-        updateNotificationWithError(tempTxHash, userFriendlyError);
-      } else {
-        // Add error notification if no transaction was created
-        addNotification(state.fromChain, state.toChain, 'FAILED', 'no-tx-' + Date.now(), amountStr, userFriendlyError);
-      }
-
-      setBridgeButtonText('Bridge Failed');
-      setTimeout(() => {
-        setBridgeButtonText(BUTTON_STATES.BRIDGE);
-        setBridgeButtonDisabled(false);
-      }, 3000);
-    }
-  };
-
-  const handleMainAction = async () => {
-    if (!isConnected) {
-      await connectWallet();
-      return;
-    }
-
-    if (needsChainSwitch) {
-      try {
-        await switchToChain(state.fromChain);
-      } catch (error) {
-        console.error('Chain switch failed:', error);
-      }
-    } else {
-      await bridgeTokens();
-    }
-  };
-
-  const swapChains = () => {
-    setState({
-      fromChain: state.toChain,
-      toChain: state.fromChain
-    });
-    setAmount('');
-    console.log(`Swapped: ${CONTRACTS[state.toChain].name} → ${CONTRACTS[state.fromChain].name}`);
-  };
-
-  const clearNotificationHistory = () => {
-    console.log('Clearing notification history');
-    setNotifications([]);
-    setTimeout(() => saveNotificationsToStorage([]), 0);
-  };
-
-  const toggleNotifications = () => {
-    const willShow = !showNotifications;
-    setShowNotifications(willShow);
-
-    if (willShow && notifications.some(n => !n.viewed)) {
-      console.log('Marking notifications as viewed');
-      setNotifications(prevNotifications => {
-        const updatedNotifications = prevNotifications.map(n => ({ ...n, viewed: true }));
-        setTimeout(() => saveNotificationsToStorage(updatedNotifications), 0);
-        return updatedNotifications;
-      });
-    }
-  };
-
-  // Auto-connect wallet on load
+  // Update gas estimate
   useEffect(() => {
-    const autoConnect = async () => {
-      const { isConnected: wasConnected, savedAddress } = loadWalletConnection();
+    if (quote && quote[0]) {
+      const formattedFee = formatUnits(quote[0], 18);
+      const nativeSymbol = fromConfig.name === 'Monad' ? 'MON' : 'ETH';
+      setEstimatedGasCost(`~${parseFloat(formattedFee).toFixed(6)} ${nativeSymbol}`);
+    } else {
+      setEstimatedGasCost('--');
+    }
+  }, [quote, fromConfig.name]);
 
-      if (wasConnected && savedAddress && window.ethereum) {
-        try {
-          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-          const currentAddr = accounts.length > 0 ? ethers.getAddress(accounts[0]) : null;
-
-          if (currentAddr && currentAddr.toLowerCase() === savedAddress.toLowerCase()) {
-            setConnectButtonText(BUTTON_STATES.CONNECTING);
-            setConnectButtonDisabled(true);
-
-            const newProvider = new ethers.BrowserProvider(window.ethereum);
-            const newSigner = await newProvider.getSigner();
-
-            setProvider(newProvider);
-            setSigner(newSigner);
-            setCurrentAccount(currentAddr);
-            setIsConnected(true);
-
-            // Reset button states after successful connection
-            setConnectButtonText(BUTTON_STATES.CONNECT);
-            setConnectButtonDisabled(false);
-            setBridgeButtonText(BUTTON_STATES.BRIDGE);
-            setBridgeButtonDisabled(false);
-
-            console.log(`Auto-connected wallet: ${currentAddr}`);
-          } else {
-            clearWalletConnection();
-          }
-        } catch (error) {
-          console.warn('Auto-connect failed:', error);
-          clearWalletConnection();
-          setConnectButtonText(BUTTON_STATES.CONNECT);
-          setConnectButtonDisabled(false);
-        }
-      }
-    };
-
+  // Load notifications on mount
+  useEffect(() => {
     loadNotificationsFromStorage();
-    autoConnect();
   }, [loadNotificationsFromStorage]);
 
-  // Check current chain when wallet connects or from chain changes
-  useEffect(() => {
-    if (isConnected) {
-      checkCurrentChain();
-    }
-  }, [isConnected, state.fromChain, checkCurrentChain]);
-
-  // Update balance when account or chain changes
-  useEffect(() => {
-    updateBalance();
-  }, [updateBalance]);
-
-  // Update gas cost estimate when amount or chains change
-  useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      if (isConnected && amount) {
-        getGasCostEstimate();
-      } else {
-        setEstimatedGasCost('--');
-      }
-    }, 500); // Debounce to avoid too many API calls
-
-    return () => clearTimeout(debounceTimer);
-  }, [amount, state.fromChain, state.toChain, isConnected, getGasCostEstimate]);
-
-  // Start status polling when there are active notifications
+  // Start status polling
   useEffect(() => {
     const activeCount = notifications.filter(n => 
       ['INFLIGHT', 'CONFIRMING', 'PAYLOAD_STORED'].includes(n.status)
@@ -903,15 +445,201 @@ function App() {
       setShowToChainDropdown(false);
       setShowFromTokenDropdown(false);
       setShowNotifications(false);
+      setShowConnectorModal(false);
     };
 
     document.addEventListener('click', handleClickOutside);
     return () => document.removeEventListener('click', handleClickOutside);
   }, []);
 
+  const handleConnect = () => {
+    setShowConnectorModal(true);
+  };
+
+  const handleConnectorSelect = (connector) => {
+    setConnectButtonText(BUTTON_STATES.CONNECTING);
+    setConnectButtonDisabled(true);
+
+    connect({ connector }, {
+      onSuccess: () => {
+        setConnectButtonText(BUTTON_STATES.CONNECT);
+        setConnectButtonDisabled(false);
+        setShowConnectorModal(false);
+      },
+      onError: () => {
+        setConnectButtonText(BUTTON_STATES.CONNECT);
+        setConnectButtonDisabled(false);
+      }
+    });
+  };
+
+  const handleSwitchChain = async () => {
+    try {
+      setBridgeButtonText(BUTTON_STATES.SWITCHING_CHAIN);
+      setBridgeButtonDisabled(true);
+
+      await switchChain({ chainId: fromConfig.chainId });
+
+      setTimeout(() => {
+        setBridgeButtonText(BUTTON_STATES.BRIDGE);
+        setBridgeButtonDisabled(false);
+      }, 1000);
+    } catch (error) {
+      console.error('Chain switch failed:', error);
+      setBridgeButtonText('Switch Chain');
+      setBridgeButtonDisabled(false);
+    }
+  };
+
+  const bridgeTokens = async () => {
+    if (!isConnected || !address) {
+      console.error('Please connect your wallet first');
+      return;
+    }
+
+    if (!amount || parseFloat(amount) <= 0) {
+      console.error('Please enter a valid amount.');
+      return;
+    }
+
+    if (!fromTokenBalance || !fromTokenDecimals) {
+      console.error('Unable to fetch token balance');
+      return;
+    }
+
+    try {
+      setBridgeButtonText('Starting Bridge...');
+      setBridgeButtonDisabled(true);
+
+      const amountLD = parseUnits(amount, fromTokenDecimals);
+
+      if (fromTokenBalance < amountLD) {
+        const formattedBalance = formatUnits(fromTokenBalance, fromTokenDecimals);
+        throw new Error(`Insufficient balance: You have ${parseFloat(formattedBalance).toFixed(4)} MBD but need ${amount} MBD`);
+      }
+
+      if (!quote || !quote[0]) {
+        throw new Error('Unable to get bridge quote');
+      }
+
+      const nativeFee = quote[0];
+
+      // Check if approval is needed
+      if (!allowance || allowance < amountLD) {
+        setBridgeButtonText(BUTTON_STATES.APPROVING);
+
+        const approveHash = await writeContract({
+          address: fromConfig.token,
+          abi: ERC20_ABI,
+          functionName: 'approve',
+          args: [fromConfig.adapter, amountLD],
+        });
+
+        // Wait for approval transaction
+        setBridgeButtonText('Waiting for approval...');
+        // You might want to use useWaitForTransactionReceipt hook here
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Simple delay for demo
+      }
+
+      setBridgeButtonText(BUTTON_STATES.BRIDGING);
+
+      const hash = await writeContract({
+        address: fromConfig.adapter,
+        abi: OFT_ADAPTER_ABI,
+        functionName: 'send',
+        args: [sendParam, { nativeFee, lzTokenFee: 0n }, address],
+        value: nativeFee,
+      });
+
+      addNotification(state.fromChain, state.toChain, 'CONFIRMING', hash, amount);
+
+      setBridgeButtonText('Bridge Successful!');
+      setTimeout(() => {
+        setBridgeButtonText(BUTTON_STATES.BRIDGE);
+        setBridgeButtonDisabled(false);
+      }, 3000);
+
+    } catch (error) {
+      console.error('Bridge failed:', error);
+      addNotification(state.fromChain, state.toChain, 'FAILED', 'no-tx-' + Date.now(), amount, error.message);
+
+      setBridgeButtonText('Bridge Failed');
+      setTimeout(() => {
+        setBridgeButtonText(BUTTON_STATES.BRIDGE);
+        setBridgeButtonDisabled(false);
+      }, 3000);
+    }
+  };
+
+  const handleMainAction = async () => {
+    if (!isConnected) {
+      handleConnect();
+      return;
+    }
+
+    if (needsChainSwitch) {
+      await handleSwitchChain();
+    } else {
+      await bridgeTokens();
+    }
+  };
+
+  const swapChains = () => {
+    setState({
+      fromChain: state.toChain,
+      toChain: state.fromChain
+    });
+    setAmount('');
+  };
+
+  const clearNotificationHistory = () => {
+    setNotifications([]);
+    setTimeout(() => saveNotificationsToStorage([]), 0);
+  };
+
+  const toggleNotifications = () => {
+    const willShow = !showNotifications;
+    setShowNotifications(willShow);
+
+    if (willShow && notifications.some(n => !n.viewed)) {
+      setNotifications(prevNotifications => {
+        const updatedNotifications = prevNotifications.map(n => ({ ...n, viewed: true }));
+        setTimeout(() => saveNotificationsToStorage(updatedNotifications), 0);
+        return updatedNotifications;
+      });
+    }
+  };
+
+  const getTimeAgo = (timestamp) => {
+    const now = new Date();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (days > 0) return `${days}d ago`;
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return 'Just now';
+  };
+
+  // Format balances
+  const balance = fromTokenBalance && fromTokenDecimals ? 
+    `${parseFloat(formatUnits(fromTokenBalance, fromTokenDecimals)).toFixed(4)} ${fromConfig.tokenSymbol}` : 
+    '--';
+
+  const destinationBalance = toTokenBalance && toTokenDecimals ? 
+    `${parseFloat(formatUnits(toTokenBalance, toTokenDecimals)).toFixed(4)} ${toConfig.tokenSymbol}` : 
+    '--';
+
   const unviewedCount = notifications.filter(n => !n.viewed).length;
-  const fromConfig = CONTRACTS[state.fromChain];
-  const toConfig = CONTRACTS[state.toChain];
+
+  const getConnectorName = (connector) => {
+    if (connector.id === 'injected') return 'Injected';
+    if (connector.id === 'metaMask') return 'MetaMask';
+    if (connector.id === 'walletConnect') return 'WalletConnect';
+    return connector.name;
+  };
 
   return (
     <div>
@@ -923,17 +651,41 @@ function App() {
         <div className="orb"></div>
       </div>
 
+      {/* Connector Modal */}
+      {showConnectorModal && (
+        <div className="modal-overlay" onClick={() => setShowConnectorModal(false)}>
+          <div className="connector-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Connect Wallet</h3>
+              <button className="modal-close" onClick={() => setShowConnectorModal(false)}>×</button>
+            </div>
+            <div className="connector-list">
+              {connectors.map((connector) => (
+                <button
+                  key={connector.id}
+                  className="connector-button"
+                  onClick={() => handleConnectorSelect(connector)}
+                  disabled={connectButtonDisabled}
+                >
+                  <span>{getConnectorName(connector)}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Header */}
       <div className="mobile-header">
         <button 
           className={`mobile-header-wallet-button ${isConnected ? 'connected' : ''}`}
-          onClick={connectWallet}
+          onClick={handleConnect}
           disabled={connectButtonDisabled}
         >
           {isConnected ? (
             <div className="wallet-info">
               <div className="wallet-status">●</div>
-              <span>{currentAccount ? `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}` : 'Connected'}</span>
+              <span>{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected'}</span>
             </div>
           ) : (
             <div className="wallet-info">
@@ -967,17 +719,17 @@ function App() {
                 <path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/>
               </svg>
               Bridge
-            </div>
+            </a>
           </div>
           <button 
             className={`header-wallet-button ${isConnected ? 'connected' : ''}`}
-            onClick={connectWallet}
+            onClick={handleConnect}
             disabled={connectButtonDisabled}
           >
             {isConnected ? (
               <div className="wallet-info">
                 <div className="wallet-status">●</div>
-                <span>{currentAccount ? `${currentAccount.slice(0, 6)}...${currentAccount.slice(-4)}` : 'Connected'}</span>
+                <span>{address ? `${address.slice(0, 6)}...${address.slice(-4)}` : 'Connected'}</span>
               </div>
             ) : (
               <div className="wallet-info">
@@ -1049,7 +801,7 @@ function App() {
                           case 'FAILED':
                             return 'Failed';
                           case 'BLOCKED':
-                            return 'Blocked';
+return 'Blocked';
                           case 'INFLIGHT':
                             return 'In Flight';
                           case 'CONFIRMING':
@@ -1069,38 +821,10 @@ function App() {
                         }
                       };
 
-                      const getDetailedStatusText = (status) => {
-                        switch (status) {
-                          case 'DELIVERED':
-                            return 'Transaction completed successfully';
-                          case 'FAILED':
-                            return 'Transaction failed';
-                          case 'BLOCKED':
-                            return 'Transaction blocked by network';
-                          case 'INFLIGHT':
-                            return 'Processing cross-chain transfer';
-                          case 'CONFIRMING':
-                            return 'Waiting for blockchain confirmation';
-                          case 'PAYLOAD_STORED':
-                            return 'Message stored, awaiting execution';
-                          case 'APPLICATION_BURNED':
-                            return 'Transaction reverted and burned';
-                          case 'APPLICATION_SKIPPED':
-                            return 'Transaction skipped due to conditions';
-                          case 'UNRESOLVABLE_COMMAND':
-                            return 'Command cannot be resolved';
-                          case 'MALFORMED_COMMAND':
-                            return 'Invalid transaction format';
-                          default:
-                            return 'Transaction processing';
-                        }
-                      };
-
                       const statusClass = getStatusClass(notification.status);
                       const statusText = getStatusText(notification.status);
-                      const detailedStatus = getDetailedStatusText(notification.status);
 
-                      const handleClick = notification.txHash && !notification.txHash.startsWith('no-tx-') && !notification.txHash.startsWith('chain-add-failed-') ? 
+                      const handleClick = notification.txHash && !notification.txHash.startsWith('no-tx-') ? 
                         () => window.open(`https://testnet.layerzeroscan.com/tx/${notification.txHash}`, '_blank') : 
                         undefined;
 
@@ -1110,7 +834,6 @@ function App() {
                           className="notification-item" 
                           onClick={handleClick}
                           style={handleClick ? {cursor: 'pointer'} : {}}
-                          title={notification.errorMessage || detailedStatus}
                         >
                           <div className="notification-route">
                             <div className="notification-logos">
@@ -1130,11 +853,6 @@ function App() {
                                   {notification.errorMessage}
                                 </div>
                               )}
-                              {!notification.errorMessage && notification.status !== 'DELIVERED' && (
-                                <div style={{fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '2px', fontStyle: 'italic'}}>
-                                  {detailedStatus}
-                                </div>
-                              )}
                             </div>
                           </div>
                           <div className={`notification-status ${statusClass}`}>{statusText}</div>
@@ -1149,154 +867,16 @@ function App() {
 
           <div>
             {/* From Panel */}
-              <div className="chain-panel">
-                <div className="panel-header">
-                  <span className="panel-label">From</span>
-                  <span className="balance-info">Balance: {balance}</span>
-                </div>
-
-                <div className="selection-container">
-                  <div className="token-chain-row">
-                    <div className="dropdown">
-                      <div className="token-selector" onClick={(e) => { e.stopPropagation(); setShowFromTokenDropdown(!showFromTokenDropdown); }}>
-                        <div className="selector-content">
-                          <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
-                          <div className="selector-text">
-                            <span className="token-symbol">MBD</span>
-                            <span className="selector-label">Token</span>
-                          </div>
-                        </div>
-                        <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      {showFromTokenDropdown && (
-                        <div className="dropdown-content show">
-                          <div className="dropdown-item">
-                            <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
-                            <span>MBD</span>
-                          </div>
-                          <div className="dropdown-item coming-soon">
-                            <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px'}}>?</div>
-                            <span>More tokens</span>
-                            <span className="coming-soon-badge">Soon</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="divider"></div>
-
-                    <div className="dropdown">
-                      <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowFromChainDropdown(!showFromChainDropdown); }}>
-                        <div className="selector-content">
-                          <img src={fromConfig.logo} alt={fromConfig.name} className="chain-logo" />
-                          <div className="selector-text">
-                            <span className="chain-name">{fromConfig.name}</span>
-                            <span className="selector-label">Chain</span>
-                          </div>
-                        </div>
-                        <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      {showFromChainDropdown && (
-                        <div className="dropdown-content show">
-                          {Object.entries(CONTRACTS).map(([key, config]) => (
-                            <div 
-                              key={key}
-                              className="dropdown-item" 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                if (key !== state.toChain) {
-                                  setState({...state, fromChain: key});
-                                  setShowFromChainDropdown(false);
-                                }
-                              }}
-                            >
-                              <img src={config.logo} alt={config.name} className="chain-logo" />
-                              <span>{config.name}</span>
-                            </div>
-                          ))}
-                          <div className="dropdown-item coming-soon">
-                            <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '8px'}}>?</div>
-                            <span>More chains</span>
-                            <span className="coming-soon-badge">Soon</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="percentage-buttons">
-                  <button 
-                    className="percentage-button" 
-                    onClick={() => {
-                      if (balance !== '--' && balance !== 'Error loading') {
-                        const balanceValue = parseFloat(balance.split(' ')[0]);
-                        const amount25 = (balanceValue * 0.25).toFixed(6);
-                        setAmount(amount25.replace(/\.?0+$/, ''));
-                      }
-                    }}
-                  >
-                    25%
-                  </button>
-                  <button 
-                    className="percentage-button" 
-                    onClick={() => {
-                      if (balance !== '--' && balance !== 'Error loading') {
-                        const balanceValue = parseFloat(balance.split(' ')[0]);
-                        const amount50 = (balanceValue * 0.5).toFixed(6);
-                        setAmount(amount50.replace(/\.?0+$/, ''));
-                      }
-                    }}
-                  >
-                    50%
-                  </button>
-                  <button 
-                    className="percentage-button" 
-                    onClick={() => {
-                      if (balance !== '--' && balance !== 'Error loading') {
-                        const balanceValue = parseFloat(balance.split(' ')[0]);
-                        setAmount(balanceValue.toString());
-                      }
-                    }}
-                  >
-                    100%
-                  </button>
-                </div>
-                <div className="amount-section">
-                  <input 
-                    type="number" 
-                    className="amount-input" 
-                    placeholder="0.0" 
-                    step="any"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                  />
-                </div>
+            <div className="chain-panel">
+              <div className="panel-header">
+                <span className="panel-label">From</span>
+                <span className="balance-info">Balance: {balance}</span>
               </div>
 
-              {/* Swap Button */}
-              <div className="swap-container">
-                <button className="swap-button" onClick={swapChains} title="Swap chains">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"></path>
-                  </svg>
-                </button>
-              </div>
-
-              {/* To Panel */}
-              <div className="chain-panel">
-                <div className="panel-header">
-                  <span className="panel-label">To</span>
-                  <span className="balance-info">Balance: {destinationBalance}</span>
-                </div>
-
-                <div className="selection-container">
-                  <div className="token-chain-row">
-                    <div className="token-selector">
+              <div className="selection-container">
+                <div className="token-chain-row">
+                  <div className="dropdown">
+                    <div className="token-selector" onClick={(e) => { e.stopPropagation(); setShowFromTokenDropdown(!showFromTokenDropdown); }}>
                       <div className="selector-content">
                         <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
                         <div className="selector-text">
@@ -1304,82 +884,220 @@ function App() {
                           <span className="selector-label">Token</span>
                         </div>
                       </div>
+                      <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
                     </div>
-
-                    <div className="divider"></div>
-
-                    <div className="dropdown">
-                      <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowToChainDropdown(!showToChainDropdown); }}>
-                        <div className="selector-content">
-                          <img src={toConfig.logo} alt={toConfig.name} className="chain-logo" />
-                          <div className="selector-text">
-                            <span className="chain-name">{toConfig.name}</span>
-                            <span className="selector-label">Chain</span>
-                          </div>
+                    {showFromTokenDropdown && (
+                      <div className="dropdown-content show">
+                        <div className="dropdown-item">
+                          <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
+                          <span>MBD</span>
                         </div>
-                        <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
-                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
+                        <div className="dropdown-item coming-soon">
+                          <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '10px'}}>?</div>
+                          <span>More tokens</span>
+                          <span className="coming-soon-badge">Soon</span>
+                        </div>
                       </div>
-                      {showToChainDropdown && (
-                        <div className="dropdown-content show">
-                          {Object.entries(CONTRACTS).map(([key, config]) => (
-                            <div 
-                              key={key}
-                              className="dropdown-item" 
-                              onClick={(e) => { 
-                                e.stopPropagation(); 
-                                if (key !== state.fromChain) {
-                                  setState({...state, toChain: key});
-                                  setShowToChainDropdown(false);
-                                }
-                              }}
-                            >
-                              <img src={config.logo} alt={config.name} className="chain-logo" />
-                              <span>{config.name}</span>
-                            </div>
-                          ))}
-                          <div className="dropdown-item coming-soon">
-                            <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '8px'}}>?</div>
-                            <span>More chains</span>
-                            <span className="coming-soon-badge">Soon</span>
-                          </div>
+                    )}
+                  </div>
+
+                  <div className="divider"></div>
+
+                  <div className="dropdown">
+                    <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowFromChainDropdown(!showFromChainDropdown); }}>
+                      <div className="selector-content">
+                        <img src={fromConfig.logo} alt={fromConfig.name} className="chain-logo" />
+                        <div className="selector-text">
+                          <span className="chain-name">{fromConfig.name}</span>
+                          <span className="selector-label">Chain</span>
                         </div>
-                      )}
+                      </div>
+                      <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
                     </div>
+                    {showFromChainDropdown && (
+                      <div className="dropdown-content show">
+                        {Object.entries(CONTRACTS).map(([key, config]) => (
+                          <div 
+                            key={key}
+                            className="dropdown-item" 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (key !== state.toChain) {
+                                setState({...state, fromChain: key});
+                                setShowFromChainDropdown(false);
+                              }
+                            }}
+                          >
+                            <img src={config.logo} alt={config.name} className="chain-logo" />
+                            <span>{config.name}</span>
+                          </div>
+                        ))}
+                        <div className="dropdown-item coming-soon">
+                          <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '8px'}}>?</div>
+                          <span>More chains</span>
+                          <span className="coming-soon-badge">Soon</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="amount-section">
-                  <input 
-                    type="number" 
-                    className="amount-input to-amount-input" 
-                    placeholder="0.0" 
-                    step="any"
-                    value={amount || ''}
-                    readOnly
-                  />
-                </div>
-                
-                <div className="gas-estimate">
-                  <span className="gas-label">Estimated bridge cost:</span>
-                  <span className="gas-cost">{estimatedGasCost}</span>
-                </div>
               </div>
 
-              <button 
-                className="action-button bridge" 
-                onClick={handleMainAction}
-                disabled={bridgeButtonDisabled || connectButtonDisabled}
-              >
-                {isConnected ? bridgeButtonText : connectButtonText}
-              </button>
-
-              <div className="bridge-footer">
-                <div className="footer-text">Cross Chain Bridge</div>
-                <div className="footer-text powered">Powered by LayerZero</div>
+              <div className="percentage-buttons">
+                <button 
+                  className="percentage-button" 
+                  onClick={() => {
+                    if (fromTokenBalance && fromTokenDecimals) {
+                      const balanceValue = parseFloat(formatUnits(fromTokenBalance, fromTokenDecimals));
+                      const amount25 = (balanceValue * 0.25).toFixed(6);
+                      setAmount(amount25.replace(/\.?0+$/, ''));
+                    }
+                  }}
+                >
+                  25%
+                </button>
+                <button 
+                  className="percentage-button" 
+                  onClick={() => {
+                    if (fromTokenBalance && fromTokenDecimals) {
+                      const balanceValue = parseFloat(formatUnits(fromTokenBalance, fromTokenDecimals));
+                      const amount50 = (balanceValue * 0.5).toFixed(6);
+                      setAmount(amount50.replace(/\.?0+$/, ''));
+                    }
+                  }}
+                >
+                  50%
+                </button>
+                <button 
+                  className="percentage-button" 
+                  onClick={() => {
+                    if (fromTokenBalance && fromTokenDecimals) {
+                      const balanceValue = parseFloat(formatUnits(fromTokenBalance, fromTokenDecimals));
+                      setAmount(balanceValue.toString());
+                    }
+                  }}
+                >
+                  100%
+                </button>
+              </div>
+              <div className="amount-section">
+                <input 
+                  type="number" 
+                  className="amount-input" 
+                  placeholder="0.0" 
+                  step="any"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
               </div>
             </div>
+
+            {/* Swap Button */}
+            <div className="swap-container">
+              <button className="swap-button" onClick={swapChains} title="Swap chains">
+                <svg viewBox="0 0 24 24">
+                  <path d="M16 17.01V10h-2v7.01h-3L15 21l4-3.99h-3zM9 3L5 6.99h3V14h2V6.99h3L9 3z"></path>
+                </svg>
+              </button>
+            </div>
+
+            {/* To Panel */}
+            <div className="chain-panel">
+              <div className="panel-header">
+                <span className="panel-label">To</span>
+                <span className="balance-info">Balance: {destinationBalance}</span>
+              </div>
+
+              <div className="selection-container">
+                <div className="token-chain-row">
+                  <div className="token-selector">
+                    <div className="selector-content">
+                      <img src="https://monbridgedex.xyz/Tokenlogo.png" alt="MBD" className="token-logo" />
+                      <div className="selector-text">
+                        <span className="token-symbol">MBD</span>
+                        <span className="selector-label">Token</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="divider"></div>
+
+                  <div className="dropdown">
+                    <div className="chain-selector" onClick={(e) => { e.stopPropagation(); setShowToChainDropdown(!showToChainDropdown); }}>
+                      <div className="selector-content">
+                        <img src={toConfig.logo} alt={toConfig.name} className="chain-logo" />
+                        <div className="selector-text">
+                          <span className="chain-name">{toConfig.name}</span>
+                          <span className="selector-label">Chain</span>
+                        </div>
+                      </div>
+                      <svg className="dropdown-arrow" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    {showToChainDropdown && (
+                      <div className="dropdown-content show">
+                        {Object.entries(CONTRACTS).map(([key, config]) => (
+                          <div 
+                            key={key}
+                            className="dropdown-item" 
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              if (key !== state.fromChain) {
+                                setState({...state, toChain: key});
+                                setShowToChainDropdown(false);
+                              }
+                            }}
+                          >
+                            <img src={config.logo} alt={config.name} className="chain-logo" />
+                            <span>{config.name}</span>
+                          </div>
+                        ))}
+                        <div className="dropdown-item coming-soon">
+                          <div style={{width: '20px', height: '20px', background: '#6366f1', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '8px'}}>?</div>
+                          <span>More chains</span>
+                          <span className="coming-soon-badge">Soon</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="amount-section">
+                <input 
+                  type="number" 
+                  className="amount-input to-amount-input" 
+                  placeholder="0.0" 
+                  step="any"
+                  value={amount || ''}
+                  readOnly
+                />
+              </div>
+
+              <div className="gas-estimate">
+                <span className="gas-label">Estimated bridge cost:</span>
+                <span className="gas-cost">{estimatedGasCost}</span>
+              </div>
+            </div>
+
+            <button 
+              className="action-button bridge" 
+              onClick={handleMainAction}
+              disabled={bridgeButtonDisabled || connectButtonDisabled}
+            >
+              {isConnected ? bridgeButtonText : connectButtonText}
+            </button>
+
+            <div className="bridge-footer">
+              <div className="footer-text">Cross Chain Bridge</div>
+              <div className="footer-text powered">Powered by LayerZero</div>
+            </div>
+          </div>
         </div>
       </div>
 
